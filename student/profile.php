@@ -54,7 +54,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                              class="w-24 h-24 rounded-2xl object-cover border-4 border-theme-accent shadow-lg">
                     </template>
                     <template x-if="!profile.photo_path">
-                        <div class="w-24 h-24 rounded-2xl bg-theme-accent text-white font-cartoon font-bold text-4xl flex items-center justify-center border-4 border-white/20 shadow-lg"
+                        <div class="w-24 h-24 rounded-2xl bg-theme-accent text-white font-cartoon font-bold text-4xl flex items-center justify-center border-4 border-theme-border shadow-lg"
                              x-text="(profile.display_name || profile.full_name || 'U').substring(0,1).toUpperCase()"></div>
                     </template>
 
@@ -69,7 +69,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div>
                     <div class="flex items-center gap-2">
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-theme-accent/15 text-theme-accent"
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-theme-accent text-white"
                               x-text="profile.role"></span>
                         <span class="font-mono text-xs font-bold text-theme-muted" x-text="'#' + profile.school_id"></span>
                     </div>
@@ -88,7 +88,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </button>
         </div>
 
-        <!-- Editable Personal Info Bar -->
+        <!-- Theme-Adaptive Editable Personal Info Bar -->
         <div class="mt-6 pt-5 border-t border-theme-border">
             <form @submit.prevent="savePersonal()" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                 <div>
@@ -97,8 +97,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <button type="button" @click="editingPersonal = true; $nextTick(() => $refs.dispInput.focus())" class="text-theme-accent hover:underline">✏️ Edit</button>
                     </label>
                     <input type="text" x-ref="dispInput" x-model="profile.display_name" :readonly="!editingPersonal"
-                           :class="editingPersonal ? 'bg-theme-main border-theme-accent ring-1 ring-theme-accent' : 'bg-theme-main/50 border-theme-border opacity-80'"
-                           class="w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold text-theme-text outline-none transition">
+                           :class="editingPersonal ? 'border-theme-accent ring-2 ring-theme-accent' : 'border-theme-border opacity-85 cursor-default'"
+                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main text-theme-text border text-xs font-bold outline-none transition">
                 </div>
 
                 <div>
@@ -108,8 +108,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </label>
                     <input type="text" x-ref="contactInput" x-model="profile.contact_no" :readonly="!editingPersonal"
                            placeholder="09171234567"
-                           :class="editingPersonal ? 'bg-theme-main border-theme-accent ring-1 ring-theme-accent' : 'bg-theme-main/50 border-theme-border opacity-80'"
-                           class="w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono font-bold text-theme-text outline-none transition">
+                           :class="editingPersonal ? 'border-theme-accent ring-2 ring-theme-accent' : 'border-theme-border opacity-85 cursor-default'"
+                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main text-theme-text border text-xs font-mono font-bold outline-none transition">
                 </div>
 
                 <div>
@@ -117,7 +117,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             class="w-full py-2.5 px-4 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow transition">
                         ✓ Save Personal Info
                     </button>
-                    <div x-show="!editingPersonal" class="p-2.5 rounded-xl bg-theme-main/40 border border-theme-border text-[11px] text-theme-muted text-center">
+                    <div x-show="!editingPersonal" class="p-2.5 rounded-xl bg-theme-main border border-theme-border text-[11px] text-theme-muted text-center">
                         Click <strong>✏️ Edit</strong> to update Display Name or Contact No.
                     </div>
                 </div>
@@ -144,19 +144,19 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <div>
                     <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">First Name</label>
                     <input type="text" :value="profile.first_name" readonly disabled
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main/60 border border-theme-border text-theme-muted font-bold cursor-not-allowed">
+                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-muted font-bold opacity-80 cursor-not-allowed">
                 </div>
 
                 <div class="grid grid-cols-3 gap-3">
                     <div class="col-span-2">
                         <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">Middle Name</label>
                         <input type="text" :value="profile.middle_name || '—'" readonly disabled
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main/60 border border-theme-border text-theme-muted font-bold cursor-not-allowed">
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-muted font-bold opacity-80 cursor-not-allowed">
                     </div>
                     <div>
                         <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">M.I.</label>
                         <input type="text" :value="profile.middle_initial || '—'" readonly disabled
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main/60 border border-theme-border text-theme-muted font-mono font-bold text-center cursor-not-allowed">
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-muted font-mono font-bold text-center opacity-80 cursor-not-allowed">
                     </div>
                 </div>
 
@@ -164,19 +164,19 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <div class="col-span-2">
                         <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">Last Name</label>
                         <input type="text" :value="profile.last_name" readonly disabled
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main/60 border border-theme-border text-theme-muted font-bold cursor-not-allowed">
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-muted font-bold opacity-80 cursor-not-allowed">
                     </div>
                     <div>
                         <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">Extension</label>
                         <input type="text" :value="profile.suffix || 'None'" readonly disabled
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main/60 border border-theme-border text-theme-muted font-bold text-center cursor-not-allowed">
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-muted font-bold text-center opacity-80 cursor-not-allowed">
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">Official BCP Email</label>
                     <input type="text" :value="profile.email" readonly disabled
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main/60 border border-theme-border text-theme-muted font-mono cursor-not-allowed">
+                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-muted font-mono opacity-80 cursor-not-allowed">
                 </div>
             </div>
 
@@ -199,7 +199,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </svg>
                     </div>
 
-                    <!-- Toggle Button: "Forgot Password?" vs "Back to Regular Password Change" -->
                     <button type="button"
                             @click="forgotMode = !forgotMode; demoOtpCode = ''"
                             class="text-xs font-extrabold text-theme-accent hover:underline shrink-0">
@@ -207,7 +206,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </div>
 
-                <!-- MODE A: STANDARD PASSWORD CHANGE (Knows Current Password — No OTP Required) -->
+                <!-- MODE A: STANDARD PASSWORD CHANGE -->
                 <form x-show="!forgotMode" @submit.prevent="submitRegularPasswordChange()" class="space-y-4 text-xs">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
@@ -239,37 +238,35 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
                 </form>
 
-                <!-- MODE B: FORGOT PASSWORD FLOW (Shows Send Verification via Email API, SMS API, or Authenticator) -->
+                <!-- MODE B: FORGOT PASSWORD FLOW -->
                 <div x-show="forgotMode" x-cloak x-transition class="space-y-4 text-xs">
-                    <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px]">
-                        🔐 <strong>Forgot Password Recovery:</strong> Choose a verification method below to verify your identity without needing your current password.
+                    <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px]">
+                        🔐 <strong>Forgot Password Recovery:</strong> Choose a verification channel below to reset your password without needing your current password.
                     </div>
 
-                    <!-- Choose Verification Method -->
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <button type="button" @click="forgotForm.auth_method = 'email'"
-                                :class="forgotForm.auth_method === 'email' ? 'border-theme-accent bg-theme-accent/15 text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
+                                :class="forgotForm.auth_method === 'email' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
                                 class="p-3 rounded-xl border font-extrabold text-left transition">
                             <p>📧 Email OTP API</p>
                             <p class="text-[10px] opacity-75 font-normal mt-0.5 truncate" x-text="profile.email"></p>
                         </button>
 
                         <button type="button" @click="forgotForm.auth_method = 'sms'"
-                                :class="forgotForm.auth_method === 'sms' ? 'border-theme-accent bg-theme-accent/15 text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
+                                :class="forgotForm.auth_method === 'sms' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
                                 class="p-3 rounded-xl border font-extrabold text-left transition">
                             <p>📱 SMS OTP API</p>
                             <p class="text-[10px] opacity-75 font-normal mt-0.5 font-mono" x-text="profile.contact_no || 'No Contact No.'"></p>
                         </button>
 
                         <button type="button" @click="forgotForm.auth_method = 'ga'"
-                                :class="forgotForm.auth_method === 'ga' ? 'border-theme-accent bg-theme-accent/15 text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
+                                :class="forgotForm.auth_method === 'ga' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
                                 class="p-3 rounded-xl border font-extrabold text-left transition">
                             <p>🔐 Authenticator 2FA</p>
                             <p class="text-[10px] opacity-75 font-normal mt-0.5" x-text="profile.ga_enabled == 1 ? '6-Digit App Code' : 'Setup in 2FA card below'"></p>
                         </button>
                     </div>
 
-                    <!-- Send Verification Code Box (Only shown for Email or SMS) -->
                     <div x-show="forgotForm.auth_method === 'email' || forgotForm.auth_method === 'sms'"
                          class="p-3.5 rounded-xl bg-theme-main border border-theme-border space-y-2">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -284,7 +281,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             </button>
                         </div>
 
-                        <div x-show="demoOtpCode" x-cloak class="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-300 font-mono">
+                        <div x-show="demoOtpCode" x-cloak class="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-400 font-mono">
                             🧪 <strong>Local XAMPP Sandbox OTP:</strong> <span class="text-sm font-extrabold underline select-all" x-text="demoOtpCode"></span>
                         </div>
                     </div>
@@ -340,7 +337,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </div>
 
-                <!-- QR Code & Base32 Secret Setup Drawer -->
                 <div x-show="gaSetupOpen" x-cloak x-transition class="p-4 rounded-xl bg-theme-main border border-theme-border flex flex-col sm:flex-row items-center gap-5">
                     <div class="p-3 bg-white rounded-xl border-2 border-theme-accent shrink-0">
                         <div id="gaQrCanvas" class="w-36 h-36 flex items-center justify-center"></div>

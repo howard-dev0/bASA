@@ -4,10 +4,9 @@ $page_title = 'Webcam QR Circulation Desk';
 require_once __DIR__ . '/../includes/header.php';
 require_role(['librarian', 'super_admin']);
 
-$pdo =$GLOBALS['pdo'];
+$pdo = $GLOBALS['pdo'];
 
-// Fetch sample accessions for quick defense testing buttons
-$sample_accessions =$pdo->query("
+$sample_accessions = $pdo->query("
     SELECT ia.accession_no, ia.status, ci.title 
     FROM item_accessions ia 
     JOIN catalog_items ci ON ia.catalog_id = ci.id 
@@ -16,15 +15,38 @@ $sample_accessions =$pdo->query("
 
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
-<!-- HTML5-QRCode Webcam Scanner Library -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-<div x-data="circulationDeskApp()" x-init="loadRecentActivity()" class="space-y-6">
+<div x-data="circulationDeskApp()" x-init="loadRecentActivity()" @keydown.escape.window="alertMsg = ''" class="space-y-6">
+
+    <!-- CENTERED SCREEN RESPONSE MODAL -->
+    <div x-show="alertMsg" x-cloak
+         class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+         x-transition>
+        <div @click.away="alertMsg = ''"
+             :class="alertSuccess ? 'border-emerald-500' : 'border-[#D9232A]'"
+             class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+            <div :class="alertSuccess ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'"
+                 class="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center text-2xl font-extrabold">
+                <span x-text="alertSuccess ? '✓' : '⚠️'"></span>
+            </div>
+            <div>
+                <h3 class="text-base font-extrabold" :class="alertSuccess ? 'text-emerald-400' : 'text-red-400'"
+                    x-text="alertSuccess ? 'Circulation Scan Verified' : 'Scan / Verification Error'"></h3>
+                <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="alertMsg"></p>
+            </div>
+            <button type="button" @click="alertMsg = ''"
+                    :class="alertSuccess ? 'bg-emerald-500 text-slate-950' : 'bg-[#D9232A] text-white'"
+                    class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
+                OK
+            </button>
+        </div>
+    </div>
 
     <!-- Top Desk Status Banner -->
     <div class="bg-theme-card border border-theme-border border-l-4 border-l-theme-accent rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs">
         <div>
-            <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-theme-accent/15 text-theme-accent">
+            <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-theme-accent text-white">
                 4th Floor Help Desk • Optical Verification Terminal
             </span>
             <h1 class="text-xl sm:text-2xl font-extrabold text-theme-text mt-2">
@@ -48,14 +70,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
     </div>
 
-    <!-- Status Toast Alert -->
-    <div x-show="alertMsg" x-cloak x-transition
-         :class="alertSuccess ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'bg-red-500/15 border-red-500/40 text-red-400'"
-         class="p-4 rounded-xl border text-xs font-bold flex items-center justify-between">
-        <span x-text="alertMsg"></span>
-        <button @click="alertMsg = ''" class="text-base font-extrabold">&times;</button>
-    </div>
-
     <!-- MAIN 12-COLUMN CIRCULATION WORKSPACE -->
     <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
@@ -69,7 +83,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                           x-text="cameraActive ? '● CAMERA LIVE' : 'STANDBY'"></span>
                 </div>
 
-                <!-- HTML5 QR Reader Container -->
                 <div class="w-full min-h-[250px] bg-slate-950 rounded-xl border-2 border-dashed border-theme-border overflow-hidden flex flex-col items-center justify-center relative">
                     <div id="qr-reader" class="w-full"></div>
                     <div x-show="!cameraActive" class="p-6 text-center space-y-2">
@@ -78,7 +91,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
                 </div>
 
-                <!-- Manual / USB Barcode Gun Input -->
                 <form @submit.prevent="submitScan(manualInput)" class="mt-4 flex gap-2">
                     <input type="text" x-model="manualInput"
                            placeholder="Paste QR payload or Accession (e.g. BCP-BOK-IT-00001)"
@@ -89,7 +101,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </form>
 
-                <!-- CAPSTONE DEFENSE 1-CLICK SCAN SIMULATOR -->
                 <div class="mt-4 pt-4 border-t border-theme-border space-y-2.5">
                     <p class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">
                         ⚡ Capstone Defense Single-PC Scan Simulator
@@ -105,7 +116,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </button>
                     </div>
                     <div class="flex flex-wrap gap-1.5">
-                        <?php foreach ($sample_accessions as$sa): ?>
+                        <?php foreach ($sample_accessions as $sa): ?>
                             <button type="button" @click="submitScan('<?= e($sa['accession_no']) ?>')"
                                     class="px-2.5 py-1.5 rounded-lg bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-mono font-bold text-theme-text transition">
                                 📘 <?= e($sa['accession_no']) ?>
@@ -120,7 +131,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div class="xl:col-span-7 space-y-4">
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- TIER 1: BORROWER 2x2 IDENTITY VERIFICATION CARD -->
+                <!-- TIER 1: BORROWER 2x2 IDENTITY VERIFICATION CARD (Shows Uploaded Photo) -->
                 <div class="bg-theme-card border-2 rounded-2xl p-5 transition"
                      :class="scannedStudent ? 'border-emerald-500/60' : 'border-theme-border'">
                     <div class="flex items-center justify-between mb-3">
@@ -138,9 +149,15 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                     <template x-if="scannedStudent">
                         <div class="flex items-center gap-4">
-                            <div class="w-16 h-16 rounded-2xl bg-theme-accent text-white font-cartoon font-bold text-2xl flex items-center justify-center shrink-0 shadow-md border-2 border-white/20">
-                                <span x-text="scannedStudent.full_name.substring(0,1)"></span>
-                            </div>
+                            <template x-if="scannedStudent.photo_path">
+                                <img :src="'<?= BASE_URL ?>/' + scannedStudent.photo_path"
+                                     class="w-16 h-16 rounded-2xl object-cover shrink-0 shadow-md border-2 border-emerald-500">
+                            </template>
+                            <template x-if="!scannedStudent.photo_path">
+                                <div class="w-16 h-16 rounded-2xl bg-theme-accent text-white font-cartoon font-bold text-2xl flex items-center justify-center shrink-0 shadow-md border-2 border-theme-border">
+                                    <span x-text="scannedStudent.full_name.substring(0,1)"></span>
+                                </div>
+                            </template>
                             <div class="min-w-0">
                                 <h3 class="text-base font-extrabold text-theme-text truncate" x-text="scannedStudent.full_name"></h3>
                                 <p class="text-xs font-mono font-bold text-theme-accent mt-0.5" x-text="'#' + scannedStudent.school_id"></p>
@@ -362,7 +379,9 @@ function circulationDeskApp() {
                 body: JSON.stringify({ action: 'scan_decode', qr_code: codeString })
             });
             const data = await res.json();
-            this.showToast(data.message, data.success);
+            if (!data.success) {
+                this.showToast(data.message, false);
+            }
 
             if (data.success) {
                 if (data.scan_type === 'student_qr') {

@@ -7,7 +7,31 @@ $auto_verify_id = (int) ($_GET['verify'] ?? 0);
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 
-<div x-data="adminRoomMonitor(<?= $auto_verify_id ?>)" x-init="loadMonitor()" class="space-y-6">
+<div x-data="adminRoomMonitor(<?= $auto_verify_id ?>)" x-init="loadMonitor()" @keydown.escape.window="feedbackMsg = ''" class="space-y-6">
+
+    <!-- CENTERED SCREEN RESPONSE MODAL -->
+    <div x-show="feedbackMsg" x-cloak
+         class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+         x-transition>
+        <div @click.away="feedbackMsg = ''"
+             :class="feedbackSuccess ? 'border-emerald-500' : 'border-[#D9232A]'"
+             class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+            <div :class="feedbackSuccess ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'"
+                 class="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center text-2xl font-extrabold">
+                <span x-text="feedbackSuccess ? '✓' : '⚠️'"></span>
+            </div>
+            <div>
+                <h3 class="text-base font-extrabold" :class="feedbackSuccess ? 'text-emerald-400' : 'text-red-400'"
+                    x-text="feedbackSuccess ? 'Room Status Updated' : 'Policy Violation / Error'"></h3>
+                <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="feedbackMsg"></p>
+            </div>
+            <button type="button" @click="feedbackMsg = ''"
+                    :class="feedbackSuccess ? 'bg-emerald-500 text-slate-950' : 'bg-[#D9232A] text-white'"
+                    class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
+                OK
+            </button>
+        </div>
+    </div>
 
     <!-- Top Monitor Header & Date Filter -->
     <div class="bg-theme-card border border-theme-border border-l-4 border-l-emerald-500 rounded-2xl p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
@@ -31,14 +55,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 ↻ Refresh
             </button>
         </div>
-    </div>
-
-    <!-- Alert Banner -->
-    <div x-show="feedbackMsg" x-cloak x-transition
-         :class="feedbackSuccess ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'bg-red-500/15 border-red-500/40 text-red-400'"
-         class="p-4 rounded-xl border text-xs font-bold flex items-center justify-between">
-        <span x-text="feedbackMsg"></span>
-        <button @click="feedbackMsg = ''" class="font-extrabold">&times;</button>
     </div>
 
     <!-- LIVE SPACES RADAR: DISCUSSION ROOMS A–G & CUBICLES A–F -->
@@ -154,14 +170,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                         Verify / Manage
                                     </button>
 
-                                    <!-- Quick Complete Button -->
                                     <button x-show="res.status === 'occupied' || res.status === 'pending'"
                                             @click="quickComplete(res.id)"
                                             class="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 font-extrabold text-xs transition">
                                         ✓ Complete
                                     </button>
 
-                                    <!-- Remove Button for Completed / No-Show / Cancelled / Violation -->
                                     <button x-show="res.status === 'completed' || res.status === 'no_show' || res.status === 'cancelled' || res.status === 'violation'"
                                             @click="deleteReservationRecord(res.id)"
                                             class="px-3 py-1.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white font-extrabold text-xs transition">
@@ -176,14 +190,14 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
     </div>
 
-    <!-- LIBRARIAN 6–8 MEMBER VERIFICATION MODAL -->
+    <!-- LIBRARIAN 6–8 MEMBER VERIFICATION MODAL (With 2x2 Member Photos) -->
     <div x-show="activeRes" x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5"
          x-transition>
         <div @click.away="activeRes = null"
              class="w-full max-w-3xl max-h-[90dvh] bg-theme-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
 
-            <div class="p-4 sm:p-5 border-b border-theme-border flex items-center justify-between bg-theme-main/50">
+            <div class="p-4 sm:p-5 border-b border-theme-border flex items-center justify-between bg-theme-main">
                 <div>
                     <div class="flex items-center gap-2">
                         <span class="px-2.5 py-0.5 rounded bg-theme-accent text-white text-xs font-extrabold" x-text="activeRes?.space_name"></span>
@@ -219,9 +233,15 @@ require_once __DIR__ . '/../includes/sidebar.php';
                              :class="mem.is_present == 1 ? 'border-emerald-500 bg-emerald-500/10' : 'border-theme-border bg-theme-main hover:bg-theme-hover'"
                              class="p-3.5 rounded-xl border-2 cursor-pointer transition flex items-center justify-between gap-3 select-none">
                             <div class="flex items-center gap-3 min-w-0">
-                                <div class="w-11 h-11 rounded-xl bg-theme-accent text-white font-cartoon font-bold flex items-center justify-center text-base shrink-0 shadow">
-                                    <span x-text="mem.full_name.substring(0,1)"></span>
-                                </div>
+                                <template x-if="mem.photo_path">
+                                    <img :src="'<?= BASE_URL ?>/' + mem.photo_path"
+                                         class="w-11 h-11 rounded-xl object-cover shrink-0 shadow border border-theme-accent">
+                                </template>
+                                <template x-if="!mem.photo_path">
+                                    <div class="w-11 h-11 rounded-xl bg-theme-accent text-white font-cartoon font-bold flex items-center justify-center text-base shrink-0 shadow">
+                                        <span x-text="mem.full_name.substring(0,1)"></span>
+                                    </div>
+                                </template>
                                 <div class="min-w-0">
                                     <p class="text-xs font-extrabold text-theme-text truncate" x-text="(idx + 1) + '. ' + mem.full_name"></p>
                                     <p class="text-[11px] font-mono text-theme-accent" x-text="'#' + mem.school_id + ' • ' + (mem.program_code || 'BCP')"></p>
@@ -251,7 +271,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </div>
             </div>
 
-            <!-- Modal Footer Controls -->
             <div class="p-4 bg-theme-main border-t border-theme-border flex flex-wrap items-center justify-between gap-2">
                 <div class="flex flex-wrap items-center gap-2">
                     <button type="button" @click="updateBookingStatus('no_show')"

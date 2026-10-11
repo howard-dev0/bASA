@@ -4,7 +4,6 @@ $pdo = $GLOBALS['pdo'];
 $current_role = $_SESSION['role'] ?? 'student';
 $current_uri  = $_SERVER['REQUEST_URI'];
 
-// Refresh current user's display_name and photo_path for live sidebar rendering
 $sidebar_user = [
     'full_name'    => $_SESSION['full_name'] ?? 'User',
     'display_name' => $_SESSION['display_name'] ?? '',
@@ -31,28 +30,31 @@ $nav_links = [];
 
 if (in_array($current_role, ['student', 'faculty'])) {
     $nav_links = [
-        ['url' => BASE_URL . '/student/index.php',            'label' => 'My Dashboard',         'icon' => 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
-        ['url' => BASE_URL . '/student/profile.php',          'label' => 'My Profile & Security','icon' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'],
-        ['url' => BASE_URL . '/student/my_books.php',         'label' => 'My Borrowed Books',    'icon' => 'M16 4v12l-4-2-4 2V4M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
-        ['url' => BASE_URL . '/student/catalog.php',          'label' => 'OPAC & 4F Map',        'icon' => 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'],
-        ['url' => BASE_URL . '/student/dynamic_id.php',       'label' => 'Dynamic 30s QR ID',    'icon' => 'M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z'],
-        ['url' => BASE_URL . '/student/room_reservation.php', 'label' => 'Discussion Rooms A–G', 'icon' => 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'],
+        ['url' => BASE_URL . '/student/index.php',            'label' => 'My Dashboard',             'icon' => 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
+        ['url' => BASE_URL . '/student/profile.php',          'label' => 'My Profile & Security',    'icon' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'],
+        ['url' => BASE_URL . '/student/my_books.php',         'label' => 'My Borrowed Books',        'icon' => 'M16 4v12l-4-2-4 2V4M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
+        ['url' => BASE_URL . '/student/catalog.php',          'label' => 'OPAC & 4F Map',            'icon' => 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'],
+        ['url' => BASE_URL . '/student/dynamic_id.php',       'label' => 'Dynamic 30s QR ID',        'icon' => 'M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z'],
+        ['url' => BASE_URL . '/student/room_reservation.php', 'label' => 'Discussion Rooms A–G',     'icon' => 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'],
+        ['url' => BASE_URL . '/student/gallery_contact.php',  'label' => '3F/4F Gallery & Reach Us', 'icon' => 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
     ];
 } elseif ($current_role === 'librarian') {
     $nav_links = [
-        ['url' => BASE_URL . '/admin/index.php',            'label' => 'Operations Overview',  'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
-        ['url' => BASE_URL . '/admin/circulation_desk.php', 'label' => 'Webcam QR Scanner',    'icon' => 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z'],
-        ['url' => BASE_URL . '/admin/catalog_manager.php',  'label' => 'Book & QR Cataloging', 'icon' => 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'],
-        ['url' => BASE_URL . '/admin/room_monitor.php',     'label' => 'Rooms A–G Monitor',    'icon' => 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'],
-        ['url' => BASE_URL . '/student/profile.php',        'label' => 'My Profile & Security','icon' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'],
+        ['url' => BASE_URL . '/admin/index.php',              'label' => 'Operations Overview',      'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
+        ['url' => BASE_URL . '/admin/circulation_desk.php',   'label' => 'Webcam QR Scanner',        'icon' => 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z'],
+        ['url' => BASE_URL . '/admin/catalog_manager.php',    'label' => 'Book & QR Cataloging',     'icon' => 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'],
+        ['url' => BASE_URL . '/admin/room_monitor.php',       'label' => 'Rooms A–G Monitor',        'icon' => 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'],
+        ['url' => BASE_URL . '/student/gallery_contact.php',  'label' => '3F/4F Gallery & Box (Edit)','icon' => 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
+        ['url' => BASE_URL . '/student/profile.php',          'label' => 'My Profile & Security',    'icon' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'],
     ];
 } elseif ($current_role === 'super_admin') {
     $nav_links = [
-        ['url' => BASE_URL . '/super_admin/index.php',     'label' => 'Accounts & System',    'icon' => 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'],
-        ['url' => BASE_URL . '/admin/index.php',           'label' => 'Librarian Desk View',  'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2z'],
-        ['url' => BASE_URL . '/admin/circulation_desk.php','label' => 'Webcam QR Scanner',    'icon' => 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z'],
-        ['url' => BASE_URL . '/admin/catalog_manager.php', 'label' => 'Catalog & Shelf Map',  'icon' => 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253'],
-        ['url' => BASE_URL . '/student/profile.php',       'label' => 'My Profile & Security','icon' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'],
+        ['url' => BASE_URL . '/super_admin/index.php',        'label' => 'Accounts & System',        'icon' => 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'],
+        ['url' => BASE_URL . '/admin/index.php',              'label' => 'Librarian Desk View',      'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2z'],
+        ['url' => BASE_URL . '/admin/circulation_desk.php',   'label' => 'Webcam QR Scanner',        'icon' => 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z'],
+        ['url' => BASE_URL . '/admin/catalog_manager.php',    'label' => 'Catalog & Shelf Map',      'icon' => 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253'],
+        ['url' => BASE_URL . '/student/gallery_contact.php',  'label' => '3F/4F Gallery & Box (Edit)','icon' => 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
+        ['url' => BASE_URL . '/student/profile.php',          'label' => 'My Profile & Security',    'icon' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'],
     ];
 }
 ?>
@@ -164,7 +166,7 @@ if (in_array($current_role, ['student', 'faculty'])) {
 
             <div class="min-w-0">
                 <h2 class="font-extrabold text-theme-text text-sm sm:text-base truncate"><?= e($page_title ?? 'Portal') ?></h2>
-                <p class="text-[11px] text-theme-muted hidden md:block truncate">Bestlink College of the Philippines • 4th Floor Library & Archives</p>
+                <p class="text-[11px] text-theme-muted hidden md:block truncate">Bestlink College of the Philippines • 3rd & 4th Floor Library & Archives</p>
             </div>
         </div>
 

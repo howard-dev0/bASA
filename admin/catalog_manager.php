@@ -58,11 +58,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
     </div>
 
     <!-- Alert Toast -->
-    <div x-show="alertMsg" x-cloak x-transition
-        :class="alertOk ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'bg-red-500/15 border-red-500/40 text-red-400'"
-        class="p-4 rounded-xl border text-xs font-bold flex items-center justify-between">
-        <span x-text="alertMsg"></span>
-        <button @click="alertMsg = ''">&times;</button>
+    <!-- CENTERED SCREEN RESPONSE MODAL -->
+    <div x-show="alertMsg" x-cloak
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+        x-transition>
+        <div @click.away="alertMsg = ''"
+            :class="alertOk ? 'border-emerald-500' : 'border-[#D9232A]'"
+            class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+            <div :class="alertOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'"
+                class="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center text-2xl font-extrabold">
+                <span x-text="alertOk ? '✓' : '⚠️'"></span>
+            </div>
+            <div>
+                <h3 class="text-base font-extrabold" :class="alertOk ? 'text-emerald-400' : 'text-red-400'"
+                    x-text="alertOk ? 'Action Successful' : 'Action Failed'"></h3>
+                <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="alertMsg"></p>
+            </div>
+            <button type="button" @click="alertMsg = ''"
+                :class="alertOk ? 'bg-emerald-500 text-slate-950' : 'bg-[#D9232A] text-white'"
+                class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
+                OK
+            </button>
+        </div>
     </div>
 
     <!-- CATALOGUE INVENTORY & QR ACCESSIONS TABLE -->

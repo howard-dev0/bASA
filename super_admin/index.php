@@ -24,39 +24,56 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
         <div class="flex flex-wrap gap-2.5 shrink-0">
             <button @click="openCreateModal()"
-                    class="px-4 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow transition">
+                class="px-4 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow transition">
                 + Provision New Account
             </button>
             <a href="<?= BASE_URL ?>/api/system/backup_db.php"
-               class="bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow transition text-center">
+                class="bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow transition text-center">
                 ⬇ .SQL Backup
             </a>
         </div>
     </div>
 
     <!-- Alert Toast -->
-    <div x-show="alertMsg" x-cloak x-transition
-         :class="alertOk ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'bg-red-500/15 border-red-500/40 text-red-400'"
-         class="p-4 rounded-xl border text-xs font-bold flex items-center justify-between">
-        <span x-text="alertMsg"></span>
-        <button @click="alertMsg = ''">&times;</button>
+    <!-- CENTERED SCREEN RESPONSE MODAL -->
+    <div x-show="alertMsg" x-cloak
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+        x-transition>
+        <div @click.away="alertMsg = ''"
+            :class="alertOk ? 'border-emerald-500' : 'border-[#D9232A]'"
+            class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+            <div :class="alertOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'"
+                class="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center text-2xl font-extrabold">
+                <span x-text="alertOk ? '✓' : '⚠️'"></span>
+            </div>
+            <div>
+                <h3 class="text-base font-extrabold" :class="alertOk ? 'text-emerald-400' : 'text-red-400'"
+                    x-text="alertOk ? 'Action Successful' : 'Action Failed'"></h3>
+                <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="alertMsg"></p>
+            </div>
+            <button type="button" @click="alertMsg = ''"
+                :class="alertOk ? 'bg-emerald-500 text-slate-950' : 'bg-[#D9232A] text-white'"
+                class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
+                OK
+            </button>
+        </div>
     </div>
 
     <!-- Navigation Tabs -->
     <div class="flex flex-wrap gap-2">
         <button @click="tab = 'accounts'"
-                :class="tab === 'accounts' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
-                class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
+            :class="tab === 'accounts' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
+            class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
             👥 Manage Accounts (<span x-text="users.length"></span>)
         </button>
         <button @click="tab = 'logs'"
-                :class="tab === 'logs' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
-                class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
+            :class="tab === 'logs' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
+            class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
             🛡️ Security Audit Trail
         </button>
         <button @click="tab = 'settings'"
-                :class="tab === 'settings' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
-                class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
+            :class="tab === 'settings' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
+            class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
             ⚙️ Fine & Circulation Policy
         </button>
     </div>
@@ -69,7 +86,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <p class="text-xs text-theme-muted">Click <strong>✏️ Edit Info</strong> to modify First/Middle/Last/Extension names or <strong>🗑️ Delete</strong> to remove an account.</p>
             </div>
             <input type="text" x-model="userFilter" placeholder="Search ID, name, or program..."
-                   class="px-3.5 py-2 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none w-full sm:w-64">
+                class="px-3.5 py-2 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none w-full sm:w-64">
         </div>
 
         <div class="overflow-x-auto">
@@ -93,7 +110,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             <td class="py-3.5 px-5">
                                 <p class="font-extrabold text-theme-text" x-text="u.full_name"></p>
                                 <p class="text-[11px] text-theme-muted font-mono"
-                                   x-text="'F: ' + (u.first_name || '-') + ' | M: ' + (u.middle_name || '-') + ' (' + (u.middle_initial || '-') + ') | L: ' + (u.last_name || '-') + (u.suffix ? ' | Ext: ' + u.suffix : '')"></p>
+                                    x-text="'F: ' + (u.first_name || '-') + ' | M: ' + (u.middle_name || '-') + ' (' + (u.middle_initial || '-') + ') | L: ' + (u.last_name || '-') + (u.suffix ? ' | Ext: ' + u.suffix : '')"></p>
                             </td>
                             <td class="py-3.5 px-5">
                                 <p class="font-bold text-theme-text" x-text="u.display_name || '—'"></p>
@@ -101,18 +118,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             </td>
                             <td class="py-3.5 px-5">
                                 <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase"
-                                      :class="u.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
-                                      x-text="u.status"></span>
+                                    :class="u.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
+                                    x-text="u.status"></span>
                             </td>
                             <td class="py-3.5 px-5 text-right">
                                 <div class="inline-flex items-center gap-2">
                                     <button type="button" @click="openEditModal(u)"
-                                            class="px-3 py-1.5 rounded-xl bg-theme-accent/15 hover:bg-theme-accent text-theme-accent hover:text-white font-extrabold text-xs transition">
+                                        class="px-3 py-1.5 rounded-xl bg-theme-accent/15 hover:bg-theme-accent text-theme-accent hover:text-white font-extrabold text-xs transition">
                                         ✏️ Edit Info
                                     </button>
                                     <button x-show="u.id != <?= (int)$_SESSION['user_id'] ?>"
-                                            type="button" @click="deleteUser(u)"
-                                            class="px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white font-extrabold text-xs transition">
+                                        type="button" @click="deleteUser(u)"
+                                        class="px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white font-extrabold text-xs transition">
                                         🗑️ Delete
                                     </button>
                                 </div>
@@ -129,7 +146,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div class="p-4 sm:p-5 border-b border-theme-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 class="text-base font-extrabold text-theme-text">Immutable Security Audit Trail (`audit_logs`)</h2>
             <input type="text" x-model="logFilter" placeholder="Filter by event, actor, or description..."
-                   class="px-3.5 py-2 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none w-full sm:w-64">
+                class="px-3.5 py-2 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none w-full sm:w-64">
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs min-w-[640px]">
@@ -166,12 +183,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <div>
                 <label class="block font-bold text-theme-muted uppercase mb-1">Daily Overdue Fine Rate (₱ PHP / Day)</label>
                 <input type="number" step="0.50" x-model="settings.daily_fine_rate" required
-                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text">
+                    class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text">
             </div>
             <div>
                 <label class="block font-bold text-theme-muted uppercase mb-1">Default Book Loan Duration (Days)</label>
                 <input type="number" x-model="settings.loan_duration_days" required min="1" max="30"
-                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text">
+                    class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text">
             </div>
             <button type="submit" class="px-5 py-2.5 rounded-xl bg-theme-accent text-white font-extrabold shadow">
                 Save Policy Settings
@@ -181,10 +198,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- MODAL: CREATE OR EDIT USER ACCOUNT (SUPER ADMIN) -->
     <div x-show="userModalOpen" x-cloak
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5"
-         x-transition>
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5"
+        x-transition>
         <div @click.away="userModalOpen = false"
-             class="w-full max-w-2xl max-h-[92dvh] bg-theme-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            class="w-full max-w-2xl max-h-[92dvh] bg-theme-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
 
             <div class="p-4 sm:p-5 border-b border-theme-border flex items-center justify-between bg-theme-main/50">
                 <div>
@@ -209,12 +226,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <div>
                         <label class="block font-extrabold uppercase text-theme-muted mb-1">School / Staff ID</label>
                         <input type="text" x-model="userForm.school_id" required placeholder="240103543"
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono font-bold text-theme-text">
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono font-bold text-theme-text">
                     </div>
                     <div>
                         <label class="block font-extrabold uppercase text-theme-muted mb-1">Program Code</label>
                         <input type="text" x-model="userForm.program_code" placeholder="BSIT (Optional for Staff)"
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
                     </div>
                 </div>
 
@@ -227,18 +244,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div>
                             <label class="block font-bold text-theme-muted mb-1">First Name *</label>
                             <input type="text" x-model="userForm.first_name" required placeholder="Juan"
-                                   class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text font-bold">
+                                class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text font-bold">
                         </div>
                         <div class="grid grid-cols-3 gap-2">
                             <div class="col-span-2">
                                 <label class="block font-bold text-theme-muted mb-1">Middle Name</label>
                                 <input type="text" x-model="userForm.middle_name" placeholder="Santos"
-                                       class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text">
+                                    class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text">
                             </div>
                             <div>
                                 <label class="block font-bold text-theme-muted mb-1">M.I.</label>
                                 <input type="text" x-model="userForm.middle_initial" placeholder="S." maxlength="5"
-                                       class="w-full px-2.5 py-2 rounded-xl bg-theme-card border border-theme-border font-mono text-center text-theme-text">
+                                    class="w-full px-2.5 py-2 rounded-xl bg-theme-card border border-theme-border font-mono text-center text-theme-text">
                             </div>
                         </div>
                     </div>
@@ -247,12 +264,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div class="sm:col-span-2">
                             <label class="block font-bold text-theme-muted mb-1">Last Name *</label>
                             <input type="text" x-model="userForm.last_name" required placeholder="Dela Cruz"
-                                   class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text font-bold">
+                                class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text font-bold">
                         </div>
                         <div>
                             <label class="block font-bold text-theme-muted mb-1">Extension (Suffix)</label>
                             <input type="text" x-model="userForm.suffix" placeholder="Jr., III (Optional)"
-                                   class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text">
+                                class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text">
                         </div>
                     </div>
                 </div>
@@ -262,17 +279,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <div>
                         <label class="block font-extrabold uppercase text-theme-muted mb-1">Display Name</label>
                         <input type="text" x-model="userForm.display_name" placeholder="JuanDC"
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
                     </div>
                     <div>
                         <label class="block font-extrabold uppercase text-theme-muted mb-1">Contact No.</label>
                         <input type="text" x-model="userForm.contact_no" placeholder="09171234567"
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
                     </div>
                     <div>
                         <label class="block font-extrabold uppercase text-theme-muted mb-1">Email Address *</label>
                         <input type="email" x-model="userForm.email" required placeholder="user@bcp.edu.ph"
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
                     </div>
                 </div>
 
@@ -287,16 +304,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
                     <div>
                         <label class="block font-extrabold uppercase text-theme-muted mb-1"
-                               x-text="isEditing ? 'Reset Password (Leave blank to keep)' : 'Initial Password *'"></label>
+                            x-text="isEditing ? 'Reset Password (Leave blank to keep)' : 'Initial Password *'"></label>
                         <input type="text" x-model="userForm.password" :required="!isEditing" placeholder="password"
-                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
                     </div>
                 </div>
 
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" @click="userModalOpen = false" class="px-4 py-2.5 rounded-xl bg-theme-main text-theme-muted font-bold">Cancel</button>
                     <button type="submit" class="px-5 py-2.5 rounded-xl bg-theme-accent text-white font-extrabold shadow"
-                            x-text="isEditing ? '✓ Save Account Changes' : '+ Create Account'"></button>
+                        x-text="isEditing ? '✓ Save Account Changes' : '+ Create Account'"></button>
                 </div>
             </form>
         </div>
@@ -305,71 +322,23 @@ require_once __DIR__ . '/../includes/sidebar.php';
 </div>
 
 <script>
-function superAdminApp() {
-    return {
-        tab: 'accounts',
-        users: [],
-        logs: [],
-        userFilter: '',
-        logFilter: '',
-        settings: { daily_fine_rate: '10.00', loan_duration_days: '3' },
-        userModalOpen: false,
-        isEditing: false,
-        alertMsg: '',
-        alertOk: true,
+    function superAdminApp() {
+        return {
+            tab: 'accounts',
+            users: [],
+            logs: [],
+            userFilter: '',
+            logFilter: '',
+            settings: {
+                daily_fine_rate: '10.00',
+                loan_duration_days: '3'
+            },
+            userModalOpen: false,
+            isEditing: false,
+            alertMsg: '',
+            alertOk: true,
 
-        userForm: {
-            id: 0,
-            role: 'student',
-            school_id: '',
-            program_code: 'BSIT',
-            first_name: '',
-            middle_name: '',
-            middle_initial: '',
-            last_name: '',
-            suffix: '',
-            display_name: '',
-            contact_no: '',
-            email: '',
-            status: 'active',
-            password: ''
-        },
-
-        get filteredUsers() {
-            const q = this.userFilter.toLowerCase().trim();
-            if (!q) return this.users;
-            return this.users.filter(u =>
-                (u.school_id || '').toLowerCase().includes(q) ||
-                (u.full_name || '').toLowerCase().includes(q) ||
-                (u.display_name || '').toLowerCase().includes(q) ||
-                (u.email || '').toLowerCase().includes(q) ||
-                (u.program_code || '').toLowerCase().includes(q)
-            );
-        },
-
-        get filteredLogs() {
-            const q = this.logFilter.toLowerCase().trim();
-            if (!q) return this.logs;
-            return this.logs.filter(l =>
-                (l.event_type || '').toLowerCase().includes(q) ||
-                (l.school_id || '').toLowerCase().includes(q) ||
-                (l.event_description || '').toLowerCase().includes(q)
-            );
-        },
-
-        async loadConsole() {
-            const res = await fetch('<?= BASE_URL ?>/api/system/manage.php?action=init');
-            const data = await res.json();
-            if (data.success) {
-                this.users = data.users;
-                this.settings = data.settings;
-                this.logs = data.logs;
-            }
-        },
-
-        openCreateModal() {
-            this.isEditing = false;
-            this.userForm = {
+            userForm: {
                 id: 0,
                 role: 'student',
                 school_id: '',
@@ -383,78 +352,141 @@ function superAdminApp() {
                 contact_no: '',
                 email: '',
                 status: 'active',
-                password: 'password'
-            };
-            this.userModalOpen = true;
-        },
-
-        openEditModal(u) {
-            this.isEditing = true;
-            this.userForm = {
-                id: u.id,
-                role: u.role,
-                school_id: u.school_id,
-                program_code: u.program_code || '',
-                first_name: u.first_name || '',
-                middle_name: u.middle_name || '',
-                middle_initial: u.middle_initial || '',
-                last_name: u.last_name || '',
-                suffix: u.suffix || '',
-                display_name: u.display_name || '',
-                contact_no: u.contact_no || '',
-                email: u.email || '',
-                status: u.status || 'active',
                 password: ''
-            };
-            this.userModalOpen = true;
-        },
+            },
 
-        async submitUserForm() {
-            const payload = {
-                action: this.isEditing ? 'update_user' : 'create_user',
-                ...this.userForm,
-                new_password: this.userForm.password
-            };
-            const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            this.alertMsg = data.message;
-            this.alertOk = data.success;
-            if (data.success) {
-                this.userModalOpen = false;
+            get filteredUsers() {
+                const q = this.userFilter.toLowerCase().trim();
+                if (!q) return this.users;
+                return this.users.filter(u =>
+                    (u.school_id || '').toLowerCase().includes(q) ||
+                    (u.full_name || '').toLowerCase().includes(q) ||
+                    (u.display_name || '').toLowerCase().includes(q) ||
+                    (u.email || '').toLowerCase().includes(q) ||
+                    (u.program_code || '').toLowerCase().includes(q)
+                );
+            },
+
+            get filteredLogs() {
+                const q = this.logFilter.toLowerCase().trim();
+                if (!q) return this.logs;
+                return this.logs.filter(l =>
+                    (l.event_type || '').toLowerCase().includes(q) ||
+                    (l.school_id || '').toLowerCase().includes(q) ||
+                    (l.event_description || '').toLowerCase().includes(q)
+                );
+            },
+
+            async loadConsole() {
+                const res = await fetch('<?= BASE_URL ?>/api/system/manage.php?action=init');
+                const data = await res.json();
+                if (data.success) {
+                    this.users = data.users;
+                    this.settings = data.settings;
+                    this.logs = data.logs;
+                }
+            },
+
+            openCreateModal() {
+                this.isEditing = false;
+                this.userForm = {
+                    id: 0,
+                    role: 'student',
+                    school_id: '',
+                    program_code: 'BSIT',
+                    first_name: '',
+                    middle_name: '',
+                    middle_initial: '',
+                    last_name: '',
+                    suffix: '',
+                    display_name: '',
+                    contact_no: '',
+                    email: '',
+                    status: 'active',
+                    password: 'password'
+                };
+                this.userModalOpen = true;
+            },
+
+            openEditModal(u) {
+                this.isEditing = true;
+                this.userForm = {
+                    id: u.id,
+                    role: u.role,
+                    school_id: u.school_id,
+                    program_code: u.program_code || '',
+                    first_name: u.first_name || '',
+                    middle_name: u.middle_name || '',
+                    middle_initial: u.middle_initial || '',
+                    last_name: u.last_name || '',
+                    suffix: u.suffix || '',
+                    display_name: u.display_name || '',
+                    contact_no: u.contact_no || '',
+                    email: u.email || '',
+                    status: u.status || 'active',
+                    password: ''
+                };
+                this.userModalOpen = true;
+            },
+
+            async submitUserForm() {
+                const payload = {
+                    action: this.isEditing ? 'update_user' : 'create_user',
+                    ...this.userForm,
+                    new_password: this.userForm.password
+                };
+                const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                this.alertMsg = data.message;
+                this.alertOk = data.success;
+                if (data.success) {
+                    this.userModalOpen = false;
+                    await this.loadConsole();
+                }
+            },
+
+            async deleteUser(u) {
+                if (!confirm(`Are you sure you want to permanently delete account #${u.school_id} (${u.full_name})?`)) return;
+                const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'delete_user',
+                        user_id: u.id
+                    })
+                });
+                const data = await res.json();
+                this.alertMsg = data.message;
+                this.alertOk = data.success;
+                if (data.success) await this.loadConsole();
+            },
+
+            async saveSettings() {
+                const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'save_settings',
+                        ...this.settings
+                    })
+                });
+                const data = await res.json();
+                this.alertMsg = data.message;
+                this.alertOk = data.success;
                 await this.loadConsole();
             }
-        },
-
-        async deleteUser(u) {
-            if (!confirm(`Are you sure you want to permanently delete account #${u.school_id} (${u.full_name})?`)) return;
-            const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'delete_user', user_id: u.id })
-            });
-            const data = await res.json();
-            this.alertMsg = data.message;
-            this.alertOk = data.success;
-            if (data.success) await this.loadConsole();
-        },
-
-        async saveSettings() {
-            const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'save_settings', ...this.settings })
-            });
-            const data = await res.json();
-            this.alertMsg = data.message;
-            this.alertOk = data.success;
-            await this.loadConsole();
-        }
-    };
-}
+        };
+    }
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
