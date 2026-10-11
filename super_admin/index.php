@@ -1,6 +1,6 @@
 <?php
 // super_admin/index.php
-$page_title = 'Super Admin Security & System Console';
+$page_title = 'Super Admin Accounts & Security Console';
 require_once __DIR__ . '/../includes/header.php';
 require_role(['super_admin']);
 require_once __DIR__ . '/../includes/sidebar.php';
@@ -15,17 +15,23 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 SUPER ADMIN SECURITY CONSOLE
             </span>
             <h1 class="text-xl sm:text-2xl font-extrabold text-theme-text mt-2">
-                System Telemetry, Accounts & Disaster Recovery
+                Registrar Account Management, Audit Trail & SQL Backup
             </h1>
             <p class="text-xs text-theme-muted mt-0.5">
-                Manage Librarian & Student accounts, configure overdue fine policies, inspect audit logs, and export `.sql` backups.
+                Only Super Admin can edit official legal names (First, Middle, M.I., Last, Extension) and delete user accounts.
             </p>
         </div>
 
-        <a href="<?= BASE_URL ?>/api/system/backup_db.php"
-           class="bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs px-5 py-3 rounded-xl shadow transition shrink-0 text-center">
-            ⬇ Download Full .SQL Database Backup
-        </a>
+        <div class="flex flex-wrap gap-2.5 shrink-0">
+            <button @click="openCreateModal()"
+                    class="px-4 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow transition">
+                + Provision New Account
+            </button>
+            <a href="<?= BASE_URL ?>/api/system/backup_db.php"
+               class="bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow transition text-center">
+                ⬇ .SQL Backup
+            </a>
+        </div>
     </div>
 
     <!-- Alert Toast -->
@@ -38,15 +44,15 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- Navigation Tabs -->
     <div class="flex flex-wrap gap-2">
+        <button @click="tab = 'accounts'"
+                :class="tab === 'accounts' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
+                class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
+            👥 Manage Accounts (<span x-text="users.length"></span>)
+        </button>
         <button @click="tab = 'logs'"
                 :class="tab === 'logs' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
                 class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
             🛡️ Security Audit Trail
-        </button>
-        <button @click="tab = 'accounts'"
-                :class="tab === 'accounts' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
-                class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition">
-            👥 Staff & Student Accounts (<span x-text="users.length"></span>)
         </button>
         <button @click="tab = 'settings'"
                 :class="tab === 'settings' ? 'bg-theme-accent text-white shadow' : 'bg-theme-card text-theme-muted border border-theme-border'"
@@ -55,8 +61,71 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </button>
     </div>
 
-    <!-- TAB 1: IMMUTABLE SECURITY AUDIT LOGS -->
-    <div x-show="tab === 'logs'" class="bg-theme-card border border-theme-border rounded-2xl overflow-hidden shadow-xs">
+    <!-- TAB 1: ACCOUNTS TABLE (EDIT LEGAL NAMES & DELETE ACCOUNTS) -->
+    <div x-show="tab === 'accounts'" class="bg-theme-card border border-theme-border rounded-2xl overflow-hidden shadow-xs">
+        <div class="p-4 sm:p-5 border-b border-theme-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+                <h2 class="text-base font-extrabold text-theme-text">Registered Student, Faculty & Staff Accounts</h2>
+                <p class="text-xs text-theme-muted">Click <strong>✏️ Edit Info</strong> to modify First/Middle/Last/Extension names or <strong>🗑️ Delete</strong> to remove an account.</p>
+            </div>
+            <input type="text" x-model="userFilter" placeholder="Search ID, name, or program..."
+                   class="px-3.5 py-2 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none w-full sm:w-64">
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[780px]">
+                <thead>
+                    <tr class="bg-theme-main text-theme-muted uppercase text-[10px] border-b border-theme-border">
+                        <th class="py-3.5 px-5">School ID & Role</th>
+                        <th class="py-3.5 px-5">Legal Name (First / Middle / Last / Ext)</th>
+                        <th class="py-3.5 px-5">Display Name & Contact</th>
+                        <th class="py-3.5 px-5">Status</th>
+                        <th class="py-3.5 px-5 text-right">Super Admin Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-theme-border">
+                    <template x-for="u in filteredUsers" :key="u.id">
+                        <tr class="hover:bg-theme-hover/40 transition">
+                            <td class="py-3.5 px-5">
+                                <p class="font-mono font-extrabold text-theme-accent" x-text="'#' + u.school_id"></p>
+                                <span class="text-[10px] uppercase font-bold text-theme-muted" x-text="u.role + (u.program_code ? ' • ' + u.program_code : '')"></span>
+                            </td>
+                            <td class="py-3.5 px-5">
+                                <p class="font-extrabold text-theme-text" x-text="u.full_name"></p>
+                                <p class="text-[11px] text-theme-muted font-mono"
+                                   x-text="'F: ' + (u.first_name || '-') + ' | M: ' + (u.middle_name || '-') + ' (' + (u.middle_initial || '-') + ') | L: ' + (u.last_name || '-') + (u.suffix ? ' | Ext: ' + u.suffix : '')"></p>
+                            </td>
+                            <td class="py-3.5 px-5">
+                                <p class="font-bold text-theme-text" x-text="u.display_name || '—'"></p>
+                                <p class="font-mono text-[11px] text-theme-muted" x-text="(u.contact_no || 'No phone') + ' • ' + u.email"></p>
+                            </td>
+                            <td class="py-3.5 px-5">
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase"
+                                      :class="u.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
+                                      x-text="u.status"></span>
+                            </td>
+                            <td class="py-3.5 px-5 text-right">
+                                <div class="inline-flex items-center gap-2">
+                                    <button type="button" @click="openEditModal(u)"
+                                            class="px-3 py-1.5 rounded-xl bg-theme-accent/15 hover:bg-theme-accent text-theme-accent hover:text-white font-extrabold text-xs transition">
+                                        ✏️ Edit Info
+                                    </button>
+                                    <button x-show="u.id != <?= (int)$_SESSION['user_id'] ?>"
+                                            type="button" @click="deleteUser(u)"
+                                            class="px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white font-extrabold text-xs transition">
+                                        🗑️ Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB 2: SECURITY AUDIT LOGS -->
+    <div x-show="tab === 'logs'" x-cloak class="bg-theme-card border border-theme-border rounded-2xl overflow-hidden shadow-xs">
         <div class="p-4 sm:p-5 border-b border-theme-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 class="text-base font-extrabold text-theme-text">Immutable Security Audit Trail (`audit_logs`)</h2>
             <input type="text" x-model="logFilter" placeholder="Filter by event, actor, or description..."
@@ -90,94 +159,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
     </div>
 
-    <!-- TAB 2: STAFF & STUDENT ACCOUNTS MANAGEMENT -->
-    <div x-show="tab === 'accounts'" x-cloak class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <!-- Create Account Form -->
-        <div class="xl:col-span-4 bg-theme-card border border-theme-border rounded-2xl p-5 h-fit space-y-4">
-            <h3 class="text-base font-extrabold text-theme-text">Create Staff / Student Account</h3>
-            <form @submit.prevent="createUser()" class="space-y-3 text-xs">
-                <div>
-                    <label class="block font-bold text-theme-muted uppercase mb-1">Role</label>
-                    <select x-model="newUser.role" class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
-                        <option value="librarian">Librarian Staff (e.g. LIB-002)</option>
-                        <option value="student">BCP Student (9-Digit ID)</option>
-                        <option value="faculty">Faculty Member</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block font-bold text-theme-muted uppercase mb-1">School / Staff ID</label>
-                    <input type="text" x-model="newUser.school_id" required
-                           :placeholder="newUser.role === 'student' ? '9-digit ID (e.g. 240103543)' : 'e.g. LIB-002'"
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
-                </div>
-                <div>
-                    <label class="block font-bold text-theme-muted uppercase mb-1">Full Name</label>
-                    <input type="text" x-model="newUser.full_name" required placeholder="Full Name"
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
-                </div>
-                <div>
-                    <label class="block font-bold text-theme-muted uppercase mb-1">Email</label>
-                    <input type="email" x-model="newUser.email" required placeholder="user@bcp.edu.ph"
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
-                </div>
-                <div x-show="newUser.role === 'student'">
-                    <label class="block font-bold text-theme-muted uppercase mb-1">Program Code</label>
-                    <input type="text" x-model="newUser.program_code" placeholder="BSIT"
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
-                </div>
-                <div>
-                    <label class="block font-bold text-theme-muted uppercase mb-1">Initial Password</label>
-                    <input type="text" x-model="newUser.password" required
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
-                </div>
-                <button type="submit" class="w-full py-3 rounded-xl bg-theme-accent text-white font-extrabold shadow">
-                    + Provision Account
-                </button>
-            </form>
-        </div>
-
-        <!-- Accounts List -->
-        <div class="xl:col-span-8 bg-theme-card border border-theme-border rounded-2xl overflow-hidden">
-            <div class="p-4 border-b border-theme-border">
-                <h3 class="text-base font-extrabold text-theme-text">Registered Accounts</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs min-w-[540px]">
-                    <thead>
-                        <tr class="bg-theme-main text-theme-muted uppercase text-[10px] border-b border-theme-border">
-                            <th class="py-3 px-4">ID & Name</th>
-                            <th class="py-3 px-4">Role</th>
-                            <th class="py-3 px-4">Status</th>
-                            <th class="py-3 px-4 text-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-theme-border">
-                        <template x-for="u in users" :key="u.id">
-                            <tr>
-                                <td class="py-3 px-4">
-                                    <p class="font-bold text-theme-text" x-text="u.full_name"></p>
-                                    <p class="font-mono text-[11px] text-theme-accent" x-text="'#' + u.school_id + ' • ' + u.email"></p>
-                                </td>
-                                <td class="py-3 px-4 uppercase font-mono font-bold text-theme-muted" x-text="u.role"></td>
-                                <td class="py-3 px-4">
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase"
-                                          :class="u.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
-                                          x-text="u.status"></span>
-                                </td>
-                                <td class="py-3 px-4 text-right">
-                                    <button x-show="u.role !== 'super_admin'"
-                                            @click="toggleUserStatus(u.id)"
-                                            class="px-3 py-1.5 rounded-lg bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-bold text-theme-text"
-                                            x-text="u.status === 'active' ? 'Suspend' : 'Activate'"></button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
     <!-- TAB 3: GLOBAL FINE & CIRCULATION POLICY -->
     <div x-show="tab === 'settings'" x-cloak class="max-w-lg bg-theme-card border border-theme-border rounded-2xl p-6 space-y-4">
         <h3 class="text-base font-extrabold text-theme-text">Circulation & Overdue Fine Policy</h3>
@@ -198,19 +179,173 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </form>
     </div>
 
+    <!-- MODAL: CREATE OR EDIT USER ACCOUNT (SUPER ADMIN) -->
+    <div x-show="userModalOpen" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5"
+         x-transition>
+        <div @click.away="userModalOpen = false"
+             class="w-full max-w-2xl max-h-[92dvh] bg-theme-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+
+            <div class="p-4 sm:p-5 border-b border-theme-border flex items-center justify-between bg-theme-main/50">
+                <div>
+                    <h3 class="text-base font-extrabold text-theme-text"
+                        x-text="isEditing ? 'Edit Registrar Account & Legal Name' : 'Provision New Account'"></h3>
+                    <p class="text-xs text-theme-muted">Super Admin Exclusive: Edit First Name, Middle Name, M.I., Last Name & Extension</p>
+                </div>
+                <button @click="userModalOpen = false" class="w-8 h-8 rounded-lg bg-theme-hover text-theme-muted font-bold">&times;</button>
+            </div>
+
+            <form @submit.prevent="submitUserForm()" class="p-5 overflow-y-auto space-y-4 text-xs">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1">Role</label>
+                        <select x-model="userForm.role" class="w-full px-3 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
+                            <option value="student">Student</option>
+                            <option value="faculty">Faculty</option>
+                            <option value="librarian">Librarian</option>
+                            <option value="super_admin">Super Admin</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1">School / Staff ID</label>
+                        <input type="text" x-model="userForm.school_id" required placeholder="240103543"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono font-bold text-theme-text">
+                    </div>
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1">Program Code</label>
+                        <input type="text" x-model="userForm.program_code" placeholder="BSIT (Optional for Staff)"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
+                    </div>
+                </div>
+
+                <!-- Structured Legal Name Fields -->
+                <div class="p-4 rounded-xl bg-theme-main border border-theme-border space-y-3">
+                    <p class="text-[11px] font-extrabold uppercase tracking-wider text-amber-400">
+                        🔒 Registrar Legal Name Fields (Super Admin Editable)
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-bold text-theme-muted mb-1">First Name *</label>
+                            <input type="text" x-model="userForm.first_name" required placeholder="Juan"
+                                   class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text font-bold">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="col-span-2">
+                                <label class="block font-bold text-theme-muted mb-1">Middle Name</label>
+                                <input type="text" x-model="userForm.middle_name" placeholder="Santos"
+                                       class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-theme-muted mb-1">M.I.</label>
+                                <input type="text" x-model="userForm.middle_initial" placeholder="S." maxlength="5"
+                                       class="w-full px-2.5 py-2 rounded-xl bg-theme-card border border-theme-border font-mono text-center text-theme-text">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="sm:col-span-2">
+                            <label class="block font-bold text-theme-muted mb-1">Last Name *</label>
+                            <input type="text" x-model="userForm.last_name" required placeholder="Dela Cruz"
+                                   class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text font-bold">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-theme-muted mb-1">Extension (Suffix)</label>
+                            <input type="text" x-model="userForm.suffix" placeholder="Jr., III (Optional)"
+                                   class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border text-theme-text">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display Name, Contact No, Email, Status & Password -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1">Display Name</label>
+                        <input type="text" x-model="userForm.display_name" placeholder="JuanDC"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
+                    </div>
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1">Contact No.</label>
+                        <input type="text" x-model="userForm.contact_no" placeholder="09171234567"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
+                    </div>
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1">Email Address *</label>
+                        <input type="email" x-model="userForm.email" required placeholder="user@bcp.edu.ph"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1">Account Status</label>
+                        <select x-model="userForm.status" class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                            <option value="graduated">Graduated</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-extrabold uppercase text-theme-muted mb-1"
+                               x-text="isEditing ? 'Reset Password (Leave blank to keep)' : 'Initial Password *'"></label>
+                        <input type="text" x-model="userForm.password" :required="!isEditing" placeholder="password"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="userModalOpen = false" class="px-4 py-2.5 rounded-xl bg-theme-main text-theme-muted font-bold">Cancel</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-theme-accent text-white font-extrabold shadow"
+                            x-text="isEditing ? '✓ Save Account Changes' : '+ Create Account'"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
 
 <script>
 function superAdminApp() {
     return {
-        tab: 'logs',
+        tab: 'accounts',
         users: [],
         logs: [],
+        userFilter: '',
         logFilter: '',
         settings: { daily_fine_rate: '10.00', loan_duration_days: '3' },
-        newUser: { role: 'librarian', school_id: '', full_name: '', email: '', program_code: 'BSIT', password: 'password' },
+        userModalOpen: false,
+        isEditing: false,
         alertMsg: '',
         alertOk: true,
+
+        userForm: {
+            id: 0,
+            role: 'student',
+            school_id: '',
+            program_code: 'BSIT',
+            first_name: '',
+            middle_name: '',
+            middle_initial: '',
+            last_name: '',
+            suffix: '',
+            display_name: '',
+            contact_no: '',
+            email: '',
+            status: 'active',
+            password: ''
+        },
+
+        get filteredUsers() {
+            const q = this.userFilter.toLowerCase().trim();
+            if (!q) return this.users;
+            return this.users.filter(u =>
+                (u.school_id || '').toLowerCase().includes(q) ||
+                (u.full_name || '').toLowerCase().includes(q) ||
+                (u.display_name || '').toLowerCase().includes(q) ||
+                (u.email || '').toLowerCase().includes(q) ||
+                (u.program_code || '').toLowerCase().includes(q)
+            );
+        },
 
         get filteredLogs() {
             const q = this.logFilter.toLowerCase().trim();
@@ -232,33 +367,79 @@ function superAdminApp() {
             }
         },
 
-        async createUser() {
+        openCreateModal() {
+            this.isEditing = false;
+            this.userForm = {
+                id: 0,
+                role: 'student',
+                school_id: '',
+                program_code: 'BSIT',
+                first_name: '',
+                middle_name: '',
+                middle_initial: '',
+                last_name: '',
+                suffix: '',
+                display_name: '',
+                contact_no: '',
+                email: '',
+                status: 'active',
+                password: 'password'
+            };
+            this.userModalOpen = true;
+        },
+
+        openEditModal(u) {
+            this.isEditing = true;
+            this.userForm = {
+                id: u.id,
+                role: u.role,
+                school_id: u.school_id,
+                program_code: u.program_code || '',
+                first_name: u.first_name || '',
+                middle_name: u.middle_name || '',
+                middle_initial: u.middle_initial || '',
+                last_name: u.last_name || '',
+                suffix: u.suffix || '',
+                display_name: u.display_name || '',
+                contact_no: u.contact_no || '',
+                email: u.email || '',
+                status: u.status || 'active',
+                password: ''
+            };
+            this.userModalOpen = true;
+        },
+
+        async submitUserForm() {
+            const payload = {
+                action: this.isEditing ? 'update_user' : 'create_user',
+                ...this.userForm,
+                new_password: this.userForm.password
+            };
             const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'create_user', ...this.newUser })
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
             this.alertMsg = data.message;
             this.alertOk = data.success;
             if (data.success) {
-                this.newUser.school_id = '';
-                this.newUser.full_name = '';
-                this.newUser.email = '';
+                this.userModalOpen = false;
                 await this.loadConsole();
             }
         },
 
-        async toggleUserStatus(userId) {
+        async deleteUser(u) {
+            if (!confirm(`Are you sure you want to permanently delete account #${u.school_id} (${u.full_name})?`)) return;
             const res = await fetch('<?= BASE_URL ?>/api/system/manage.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'toggle_user_status', user_id: userId })
+                body: JSON.stringify({ action: 'delete_user', user_id: u.id })
             });
             const data = await res.json();
             this.alertMsg = data.message;
             this.alertOk = data.success;
-            await this.loadConsole();
+            if (data.success) await this.loadConsole();
         },
 
         async saveSettings() {
