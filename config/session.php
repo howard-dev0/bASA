@@ -6,6 +6,21 @@ require_once __DIR__ . '/../includes/audit_logger.php';
 
 $pdo = $GLOBALS['pdo'] ?? null;
 
+// Dynamically fetch session timeout from Database, fallback to 900 (15 mins)
+$dynamic_timeout = 900;
+if ($pdo) {
+    try {
+        $stmt_to = $pdo->query("SELECT setting_value FROM system_settings WHERE setting_key = 'session_timeout_seconds' LIMIT 1");
+        if ($stmt_to) {
+            $val = $stmt_to->fetchColumn();
+            if ($val !== false) $dynamic_timeout = (int)$val;
+        }
+    } catch (\Throwable $e) {}
+}
+if (!defined('DYNAMIC_SESSION_TIMEOUT')) {
+    define('DYNAMIC_SESSION_TIMEOUT', $dynamic_timeout);
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
@@ -16,11 +31,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start(); 
 }
 
-// 15-Minute Automatic Session Timeout
+// Automatic Session Timeout Validation
 if (isset($_SESSION['user_id'])) {
-    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > SESSION_TIMEOUT)) {
+    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > DYNAMIC_SESSION_TIMEOUT)) {
         if ($pdo && is_callable('log_action')) {
-            call_user_func('log_action', $pdo, $_SESSION['user_id'], 'SESSION_TIMEOUT', 'Session expired due to 15 minutes of inactivity.');
+            call_user_func('log_action', $pdo, $_SESSION['user_id'], 'SESSION_TIMEOUT', 'Session expired due to inactivity.');
         }
         session_unset();
         session_destroy();
@@ -33,13 +48,13 @@ if (isset($_SESSION['user_id'])) {
         }
         exit();
     }
+    // Update last activity time on every page load
     $_SESSION['last_activity'] = time();
 }
 
 function require_role(array $allowed_roles): void {
     $pdo = $GLOBALS['pdo'] ?? null;
 
-    // 1. If completely logged out, send to Login
     if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
         $login_url = BASE_URL . '/login.php';
         if (headers_sent()) {
@@ -50,19 +65,14 @@ function require_role(array $allowed_roles): void {
         exit();
     }
 
-    // 2. If logged in but accessing an unauthorized page
     if (!in_array($_SESSION['role'], $allowed_roles, true)) {
         if ($pdo && is_callable('log_action')) {
             call_user_func('log_action', $pdo, $_SESSION['user_id'], 'UNAUTHORIZED_ACCESS', 'Attempted access to restricted route: ' . $_SERVER['REQUEST_URI']);
         }
-        
-        // Bounce them to the main router, which safely puts them back on their own dashboard
         $redirect_url = BASE_URL . '/index.php';
         if (headers_sent()) {
-            // HTML already started, use JS redirect
             echo "<script>window.location.replace('{$redirect_url}');</script>";
         } else {
-            // Pure PHP redirect
             header("Location: {$redirect_url}");
         }
         exit();

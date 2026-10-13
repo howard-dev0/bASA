@@ -21,9 +21,10 @@ if ($action === 'init') {
     ")->fetchAll();
 
     $settings = [
-        'daily_fine_rate'      => '10.00',
-        'loan_duration_days'   => '3',
-        'dev_mode_quick_fills' => true
+        'daily_fine_rate'         => '10.00',
+        'loan_duration_days'      => '3',
+        'session_timeout_seconds' => '900',
+        'dev_mode_quick_fills'    => true
     ];
     $stmt_s = $pdo->query("SELECT setting_key, setting_value FROM system_settings");
     while ($row = $stmt_s->fetch()) {
@@ -205,13 +206,15 @@ if ($action === 'save_settings') {
     $daily_fine = max(0, (float) ($input['daily_fine_rate'] ?? 10.00));
     $loan_days  = max(1, min(30, (int) ($input['loan_duration_days'] ?? 3)));
     $dev_mode   = !empty($input['dev_mode_quick_fills']) ? '1' : '0';
+    $timeout    = max(300, min(7200, (int) ($input['session_timeout_seconds'] ?? 900)));
 
     $stmt = $pdo->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     $stmt->execute(['daily_fine_rate', number_format($daily_fine, 2, '.', '')]);
     $stmt->execute(['loan_duration_days', (string) $loan_days]);
     $stmt->execute(['dev_mode_quick_fills', $dev_mode]);
+    $stmt->execute(['session_timeout_seconds', (string) $timeout]);
 
-    log_action($pdo, $admin_id, 'SETTINGS_UPDATE', "Updated fine rate to ₱{$daily_fine}, loan duration to {$loan_days}, dev_mode to {$dev_mode}.");
+    log_action($pdo, $admin_id, 'SETTINGS_UPDATE', "Updated fine rate, loan duration, dev_mode, and session timeout to {$timeout}s.");
     echo json_encode(['success' => true, 'message' => 'System settings updated successfully!']);
     exit();
 }

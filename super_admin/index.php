@@ -182,12 +182,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <div>
                 <label class="block font-bold text-theme-muted uppercase mb-1">Daily Overdue Fine Rate (₱ PHP / Day)</label>
                 <input type="number" step="0.50" x-model="settings.daily_fine_rate" required
-                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text">
+                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text outline-none focus:border-theme-accent transition">
             </div>
             <div>
                 <label class="block font-bold text-theme-muted uppercase mb-1">Default Book Loan Duration (Days)</label>
                 <input type="number" x-model="settings.loan_duration_days" required min="1" max="30"
-                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text">
+                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text outline-none focus:border-theme-accent transition">
+            </div>
+            <div>
+                <label class="block font-bold text-theme-muted uppercase mb-1">Session Idle Timeout (Seconds)</label>
+                <input type="number" x-model="settings.session_timeout_seconds" required min="300" max="7200" step="60"
+                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text outline-none focus:border-theme-accent transition">
+                <p class="text-[9px] text-theme-muted mt-1 ml-1">Default 900s (15 mins). Prompts "Are you there?" 60s before log out.</p>
             </div>
             <div class="pt-3 border-t border-theme-border">
                 <label class="flex items-center gap-2.5 cursor-pointer select-none">
@@ -333,7 +339,7 @@ function superAdminApp() {
         logs: [],
         userFilter: '',
         logFilter: '',
-        settings: { daily_fine_rate: '10.00', loan_duration_days: '3', dev_mode_quick_fills: true },
+        settings: { daily_fine_rate: '10.00', loan_duration_days: '3', dev_mode_quick_fills: true, session_timeout_seconds: '900' },
         userModalOpen: false,
         isEditing: false,
         alertMsg: '',

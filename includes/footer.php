@@ -2,6 +2,96 @@
     </main>
 </div>
 
+<!-- IDLE TIMEOUT "ARE YOU THERE?" MODAL -->
+<?php if (isset($_SESSION['user_id'])): ?>
+<div id="idleTimeoutModal" class="fixed inset-0 z-[999] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-sm bg-theme-card border-2 border-amber-500 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+        <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-500 border border-amber-500/40 mx-auto flex items-center justify-center text-2xl font-extrabold shadow-inner">
+            ⏳
+        </div>
+        <div>
+            <h3 class="text-base font-extrabold text-amber-400">Are you still there?</h3>
+            <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed">
+                Your session will expire in <span id="idleCountdown" class="font-mono text-amber-400 font-extrabold">60</span> seconds due to inactivity.
+            </p>
+        </div>
+        <div class="flex gap-3 pt-2">
+            <button type="button" id="btnStayLogged" class="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg transition">
+                Yes, I'm here
+            </button>
+            <button type="button" id="btnLogOutNow" class="flex-1 py-2.5 px-4 rounded-xl bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs shadow-lg transition">
+                Log Out Now
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const MAX_IDLE_TIME = <?= defined('DYNAMIC_SESSION_TIMEOUT') ? DYNAMIC_SESSION_TIMEOUT : 900 ?>; // Seconds
+        const WARN_TIME = 60; // Show warning when 60 seconds remaining
+        
+        let idleTime = 0;
+        let idleInterval;
+        let modalOpen = false;
+
+        const modal = document.getElementById('idleTimeoutModal');
+        const countdownSpan = document.getElementById('idleCountdown');
+        
+        function resetTimer() {
+            if (modalOpen) return; // Freeze reset if waiting for modal interaction
+            idleTime = 0;
+        }
+
+        function showModal() {
+            modalOpen = true;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function hideModal() {
+            modalOpen = false;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            idleTime = 0; // reset counter
+        }
+
+        async function pingServer() {
+            try { await fetch('<?= BASE_URL ?>/api/auth/ping.php'); } catch(e) {}
+        }
+
+        // Track local physical user activity
+        ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll'].forEach(evt => {
+            document.addEventListener(evt, resetTimer, { passive: true });
+        });
+
+        document.getElementById('btnStayLogged').addEventListener('click', () => {
+            pingServer();
+            hideModal();
+        });
+
+        document.getElementById('btnLogOutNow').addEventListener('click', () => {
+            window.location.href = '<?= BASE_URL ?>/api/auth/logout.php';
+        });
+
+        idleInterval = setInterval(() => {
+            idleTime++;
+            let timeLeft = MAX_IDLE_TIME - idleTime;
+
+            if (timeLeft <= WARN_TIME && timeLeft > 0) {
+                if (!modalOpen) showModal();
+                countdownSpan.innerText = timeLeft;
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(idleInterval);
+                window.location.href = '<?= BASE_URL ?>/login.php?timeout=1';
+            }
+        }, 1000);
+    })();
+</script>
+<?php endif; ?>
+
 <!-- THEME & CUSTOM COLOR BUILDER MODAL -->
 <div x-show="themeModal" x-cloak
      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-4"
