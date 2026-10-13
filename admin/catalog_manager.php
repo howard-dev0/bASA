@@ -57,7 +57,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
     </div>
 
-    <!-- Alert Toast -->
     <!-- CENTERED SCREEN RESPONSE MODAL -->
     <div x-show="alertMsg" x-cloak
         class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
@@ -120,7 +119,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             </td>
                             <td class="py-4 px-5">
                                 <span class="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono font-extrabold"
-                                    x-text="item.accessions[0]?.placement_code || 'UNASSIGNED'"></span>
+                                    x-text="(item.accessions && item.accessions.length > 0) ? item.accessions[0].placement_code : 'UNASSIGNED'"></span>
                             </td>
                             <td class="py-4 px-5">
                                 <div class="flex flex-wrap gap-1.5">
@@ -342,182 +341,42 @@ require_once __DIR__ . '/../includes/sidebar.php';
     function catalogManagerApp() {
         // Master Shelf Auto-Mapping Lookup Table
         const SHELF_MAP = {
-            'GENED': {
-                shelf: 'SH01',
-                side: 'F',
-                sec: 'S1'
-            },
-            'IT': {
-                shelf: 'SH02',
-                side: 'F',
-                sec: 'S1'
-            },
-            'CPE': {
-                shelf: 'SH02',
-                side: 'B',
-                sec: 'S1'
-            },
-            'BLIS': {
-                shelf: 'SH03',
-                side: 'F',
-                sec: 'S1'
-            },
-            'PSYCH': {
-                shelf: 'SH03',
-                side: 'B',
-                sec: 'S1'
-            },
-            'EDUC': {
-                shelf: 'SH04',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BA': {
-                shelf: 'SH05',
-                side: 'F',
-                sec: 'S1'
-            },
-            'ACC': {
-                shelf: 'SH06',
-                side: 'F',
-                sec: 'S1'
-            },
-            'ENTREP': {
-                shelf: 'SH06',
-                side: 'B',
-                sec: 'S1'
-            },
-            'OA': {
-                shelf: 'SH07',
-                side: 'F',
-                sec: 'S1'
-            },
-            'TM': {
-                shelf: 'SH07',
-                side: 'B',
-                sec: 'S1'
-            },
-            'HM': {
-                shelf: 'SH08',
-                side: 'F',
-                sec: 'S1'
-            },
-            'CRIM': {
-                shelf: 'SH09',
-                side: 'F',
-                sec: 'S1'
-            },
+            'GENED': { shelf: 'SH01', side: 'F', sec: 'S1' },
+            'IT': { shelf: 'SH02', side: 'F', sec: 'S1' },
+            'CPE': { shelf: 'SH02', side: 'B', sec: 'S1' },
+            'BLIS': { shelf: 'SH03', side: 'F', sec: 'S1' },
+            'PSYCH': { shelf: 'SH03', side: 'B', sec: 'S1' },
+            'EDUC': { shelf: 'SH04', side: 'F', sec: 'S1' },
+            'BA': { shelf: 'SH05', side: 'F', sec: 'S1' },
+            'ACC': { shelf: 'SH06', side: 'F', sec: 'S1' },
+            'ENTREP': { shelf: 'SH06', side: 'B', sec: 'S1' },
+            'OA': { shelf: 'SH07', side: 'F', sec: 'S1' },
+            'TM': { shelf: 'SH07', side: 'B', sec: 'S1' },
+            'HM': { shelf: 'SH08', side: 'F', sec: 'S1' },
+            'CRIM': { shelf: 'SH09', side: 'F', sec: 'S1' },
             // Capstones (SH00, SH10-SH14)
-            'BSIT': {
-                shelf: 'SH00',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSCPE': {
-                shelf: 'SH00',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BEED': {
-                shelf: 'SH10',
-                side: 'F',
-                sec: 'S1'
-            },
-            'CPE': {
-                shelf: 'SH10',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BTLED': {
-                shelf: 'SH10',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BPED': {
-                shelf: 'SH10',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSED-ENG': {
-                shelf: 'SH11',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSED-FIL': {
-                shelf: 'SH11',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSED-VAL': {
-                shelf: 'SH11',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSED-MATH': {
-                shelf: 'SH11',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSED-SCI': {
-                shelf: 'SH11',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSED-SOC': {
-                shelf: 'SH11',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSAIS': {
-                shelf: 'SH12',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSENTREP': {
-                shelf: 'SH12',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSOA': {
-                shelf: 'SH12',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSBA-FM': {
-                shelf: 'SH12',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSBA-HRM': {
-                shelf: 'SH12',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSBA-MM': {
-                shelf: 'SH12',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSHM': {
-                shelf: 'SH13',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSTM': {
-                shelf: 'SH13',
-                side: 'F',
-                sec: 'S2'
-            },
-            'BSCRIM': {
-                shelf: 'SH14',
-                side: 'F',
-                sec: 'S1'
-            },
-            'BSP': {
-                shelf: 'SH14',
-                side: 'F',
-                sec: 'S2'
-            }
+            'BSIT': { shelf: 'SH00', side: 'F', sec: 'S1' },
+            'BSCPE': { shelf: 'SH00', side: 'F', sec: 'S2' },
+            'BEED': { shelf: 'SH10', side: 'F', sec: 'S1' },
+            'CPE': { shelf: 'SH10', side: 'F', sec: 'S1' },
+            'BTLED': { shelf: 'SH10', side: 'F', sec: 'S2' },
+            'BPED': { shelf: 'SH10', side: 'F', sec: 'S2' },
+            'BSED-ENG': { shelf: 'SH11', side: 'F', sec: 'S1' },
+            'BSED-FIL': { shelf: 'SH11', side: 'F', sec: 'S1' },
+            'BSED-VAL': { shelf: 'SH11', side: 'F', sec: 'S1' },
+            'BSED-MATH': { shelf: 'SH11', side: 'F', sec: 'S2' },
+            'BSED-SCI': { shelf: 'SH11', side: 'F', sec: 'S2' },
+            'BSED-SOC': { shelf: 'SH11', side: 'F', sec: 'S2' },
+            'BSAIS': { shelf: 'SH12', side: 'F', sec: 'S1' },
+            'BSENTREP': { shelf: 'SH12', side: 'F', sec: 'S1' },
+            'BSOA': { shelf: 'SH12', side: 'F', sec: 'S1' },
+            'BSBA-FM': { shelf: 'SH12', side: 'F', sec: 'S2' },
+            'BSBA-HRM': { shelf: 'SH12', side: 'F', sec: 'S2' },
+            'BSBA-MM': { shelf: 'SH12', side: 'F', sec: 'S2' },
+            'BSHM': { shelf: 'SH13', side: 'F', sec: 'S1' },
+            'BSTM': { shelf: 'SH13', side: 'F', sec: 'S2' },
+            'BSCRIM': { shelf: 'SH14', side: 'F', sec: 'S1' },
+            'BSP': { shelf: 'SH14', side: 'F', sec: 'S2' }
         };
 
         return {
@@ -585,13 +444,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async submitNewItem() {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'create_item',
-                        ...this.form
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'create_item', ...this.form })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -609,13 +463,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async addExtraCopy(catalogId) {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'add_copy',
-                        catalog_id: catalogId
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'add_copy', catalog_id: catalogId })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -626,13 +475,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async deleteItem(catalogId) {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'delete_item',
-                        catalog_id: catalogId
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_item', catalog_id: catalogId })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -658,7 +502,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             openPrintAllStickers() {
                 if (this.selectedStickers.length === 0) {
-                    // Default to all available accessions if none manually clicked
                     this.items.forEach(item => {
                         item.accessions.forEach(acc => {
                             this.selectedStickers.push({

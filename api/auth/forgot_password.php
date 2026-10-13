@@ -10,6 +10,21 @@ $input      = json_decode(file_get_contents('php://input'), true) ?? [];
 $action     = $input['action'] ?? '';
 $identifier = trim($input['identifier'] ?? '');
 
+function mask_email(string $email): string {
+    $parts = explode('@', $email);
+    if (count($parts) !== 2) return $email;
+    $name = $parts[0];
+    $domain = $parts[1];
+    if (strlen($name) <= 2) return '*' . substr($name, -1) . '@' . $domain;
+    return substr($name, 0, 2) . str_repeat('*', strlen($name) - 3) . substr($name, -1) . '@' . $domain;
+}
+
+function mask_phone(string $phone): string {
+    $clean = preg_replace('/[^0-9]/', '', $phone);
+    if (strlen($clean) < 7) return $phone;
+    return substr($clean, 0, 4) . str_repeat('*', strlen($clean) - 7) . substr($clean, -3);
+}
+
 if ($identifier === '') {
     echo json_encode(['success' => false, 'message' => 'Please enter your BCP School ID or Email first.']);
     exit();
@@ -29,7 +44,21 @@ if (!$user) {
     exit();
 }
 
-// 1. SEND OTP FOR FORGOTTEN PASSWORD ON LOGIN PAGE
+// 1. FIND ACCOUNT
+if ($action === 'find_account') {
+    echo json_encode([
+        'success' => true,
+        'account' => [
+            'full_name'    => $user['full_name'],
+            'email_masked' => mask_email($user['email']),
+            'phone_masked' => !empty($user['contact_no']) ? mask_phone($user['contact_no']) : null,
+            'ga_enabled'   => (int) $user['ga_enabled'] === 1
+        ]
+    ]);
+    exit();
+}
+
+// 2. SEND OTP FOR FORGOTTEN PASSWORD
 if ($action === 'send_otp') {
     $channel = trim($input['channel'] ?? 'email');
     if (!in_array($channel, ['email', 'sms'], true)) {
@@ -63,7 +92,7 @@ if ($action === 'send_otp') {
     exit();
 }
 
-// 2. VERIFY OTP & RESET PASSWORD FROM LOGIN PAGE
+// 3. VERIFY OTP & RESET PASSWORD
 if ($action === 'reset_password') {
     $auth_method      = trim($input['auth_method'] ?? 'email');
     $otp_input        = trim($input['otp_code'] ?? '');
@@ -90,7 +119,7 @@ if ($action === 'reset_password') {
         }
     } else {
         if (empty($user['otp_code']) || $user['otp_channel'] !== $auth_method) {
-            echo json_encode(['success' => false, 'message' => 'Please click "Send Verification Code" first.']);
+            echo json_encode(['success' => false, 'message' => 'Please request a verification code first.']);
             exit();
         }
         if (strtotime($user['otp_expires_at']) < time()) {

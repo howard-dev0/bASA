@@ -12,7 +12,6 @@ $admin_id = (int) $_SESSION['user_id'];
 $input    = json_decode(file_get_contents('php://input'), true) ?? [];
 $action   = $input['action'] ?? ($_GET['action'] ?? 'init');
 
-// 1. FETCH USERS, SETTINGS & AUDIT LOGS
 if ($action === 'init') {
     $users = $pdo->query("
         SELECT id, school_id, first_name, middle_name, middle_initial, last_name, suffix,
@@ -21,10 +20,18 @@ if ($action === 'init') {
         ORDER BY FIELD(role, 'super_admin', 'librarian', 'faculty', 'student'), id ASC
     ")->fetchAll();
 
-    $settings = [];
+    $settings = [
+        'daily_fine_rate'      => '10.00',
+        'loan_duration_days'   => '3',
+        'dev_mode_quick_fills' => true
+    ];
     $stmt_s = $pdo->query("SELECT setting_key, setting_value FROM system_settings");
     while ($row = $stmt_s->fetch()) {
-        $settings[$row['setting_key']] = $row['setting_value'];
+        if ($row['setting_key'] === 'dev_mode_quick_fills') {
+            $settings['dev_mode_quick_fills'] = ($row['setting_value'] === '1');
+        } else {
+            $settings[$row['setting_key']] = $row['setting_value'];
+        }
     }
 
     $logs = $pdo->query("
@@ -44,7 +51,6 @@ if ($action === 'init') {
     exit();
 }
 
-// 2. CREATE NEW USER ACCOUNT
 if ($action === 'create_user') {
     $school_id      = trim($input['school_id'] ?? '');
     $first_name     = trim($input['first_name'] ?? '');
@@ -100,7 +106,6 @@ if ($action === 'create_user') {
     exit();
 }
 
-// 3. EDIT / UPDATE ANY USER'S LEGAL NAME & ACCOUNT INFO (Super Admin Privilege)
 if ($action === 'update_user') {
     $target_id      = (int) ($input['id'] ?? 0);
     $school_id      = trim($input['school_id'] ?? '');
@@ -153,7 +158,6 @@ if ($action === 'update_user') {
     exit();
 }
 
-// 4. DELETE USER ACCOUNT (Super Admin Privilege)
 if ($action === 'delete_user') {
     $target_id = (int) ($input['user_id'] ?? 0);
 
@@ -171,7 +175,6 @@ if ($action === 'delete_user') {
         exit();
     }
 
-    // Prevent deletion if user currently has an unreturned physical book
     $stmt_active = $pdo->prepare("SELECT COUNT(*) FROM borrow_transactions WHERE borrower_id = ? AND status IN ('active', 'overdue')");
     $stmt_active->execute([$target_id]);
     if ((int)$stmt_active->fetchColumn() > 0) {
@@ -181,8 +184,6 @@ if ($action === 'delete_user') {
 
     try {
         $pdo->beginTransaction();
-
-        // Clean up foreign key references safely
         $pdo->prepare("DELETE FROM room_reservation_members WHERE user_id = ?")->execute([$target_id]);
         $pdo->prepare("DELETE FROM room_reservations WHERE representative_id = ?")->execute([$target_id]);
         $pdo->prepare("UPDATE room_reservations SET verified_by_id = NULL WHERE verified_by_id = ?")->execute([$target_id]);
@@ -200,17 +201,18 @@ if ($action === 'delete_user') {
     exit();
 }
 
-// 5. UPDATE GLOBAL SYSTEM SETTINGS
 if ($action === 'save_settings') {
     $daily_fine = max(0, (float) ($input['daily_fine_rate'] ?? 10.00));
     $loan_days  = max(1, min(30, (int) ($input['loan_duration_days'] ?? 3)));
+    $dev_mode   = !empty($input['dev_mode_quick_fills']) ? '1' : '0';
 
-    $stmt = $pdo->prepare("UPDATE system_settings SET setting_value = ? WHERE setting_key = ?");
-    $stmt->execute([number_format($daily_fine, 2, '.', ''), 'daily_fine_rate']);
-    $stmt->execute([(string) $loan_days, 'loan_duration_days']);
+    $stmt = $pdo->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $stmt->execute(['daily_fine_rate', number_format($daily_fine, 2, '.', '')]);
+    $stmt->execute(['loan_duration_days', (string) $loan_days]);
+    $stmt->execute(['dev_mode_quick_fills', $dev_mode]);
 
-    log_action($pdo, $admin_id, 'SETTINGS_UPDATE', "Updated daily_fine_rate to ₱{$daily_fine} and loan_duration_days to {$loan_days} days.");
-    echo json_encode(['success' => true, 'message' => 'Library policy settings updated!']);
+    log_action($pdo, $admin_id, 'SETTINGS_UPDATE', "Updated fine rate to ₱{$daily_fine}, loan duration to {$loan_days}, dev_mode to {$dev_mode}.");
+    echo json_encode(['success' => true, 'message' => 'System settings updated successfully!']);
     exit();
 }
 
