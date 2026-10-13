@@ -336,4 +336,11 @@ if ($action === 'remove_booking') {
     exit();
 }
 
+// 7. GET LIVE MAP SPACES STATUS (For Map SVG highlighting)
+if ($action === 'map_status') {
+    $stmt = $pdo->query("SELECT space_code, space_name, space_type, min_capacity, max_capacity, current_status FROM library_spaces ORDER BY space_code ASC");
+    echo json_encode(['success' => true, 'spaces' => $stmt->fetchAll()]);
+    exit();
+}
+
 echo json_encode(['success' => false, 'message' => 'Invalid request action.']);

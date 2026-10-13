@@ -1,30 +1,30 @@
 <?php
 // student/catalog.php
-$page_title = 'OPAC & 4th Floor Library Map';
+$page_title = 'OPAC (Online Public Access Catalog)';
 require_once __DIR__ . '/../includes/header.php';
 require_role(['student', 'faculty', 'librarian', 'super_admin']);
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<div x-data="opacApp()" x-init="fetchCatalog()" class="space-y-6">
+<div x-data="opacApp()" x-init="initOpac()" @keydown.escape.window="closeModal()" class="space-y-6">
 
     <!-- Top OPAC Banner & Navigation Tabs -->
     <div class="bg-theme-card border border-theme-border rounded-2xl p-4 sm:p-6 shadow-xs">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-theme-border">
             <div>
                 <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-theme-accent/15 text-theme-accent">
-                    4th Floor Library Catalogue • 15 Shelves (SH00–SH14)
+                    4th Floor Library Database • 15 Shelves (SH00–SH14)
                 </span>
                 <h1 class="text-xl sm:text-2xl font-extrabold text-theme-text mt-2">
-                    Academic Literature & Capstone Archives
+                    OPAC (Online Public Access Catalog)
                 </h1>
                 <p class="text-xs text-theme-muted mt-0.5">
                     Available literature is listed first; unavailable items are placed at the end of the catalogue.
                 </p>
             </div>
 
-            <div class="flex items-center gap-2.5 shrink-0">
+            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
                 <button @click="showFloorMap = !showFloorMap"
                         :class="showFloorMap ? 'bg-amber-500 text-slate-950' : 'bg-theme-main text-theme-text border border-theme-border'"
                         class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition flex items-center gap-2 shadow-xs">
@@ -41,23 +41,23 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <!-- Mode Tabs -->
         <div class="flex flex-wrap items-center gap-2 pt-4">
             <button @click="setTab('all')"
-                    :class="activeTab === 'all' ? 'bg-theme-accent text-white shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text'"
-                    class="px-3.5 py-2 rounded-xl text-xs font-extrabold transition">
+                    :class="activeTab === 'all' ? 'bg-theme-accent text-white shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text border-theme-border'"
+                    class="px-3.5 py-2 rounded-xl border text-xs font-extrabold transition">
                 All Literature
             </button>
             <button @click="setTab('learning_book')"
-                    :class="activeTab === 'learning_book' ? 'bg-theme-accent text-white shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text'"
-                    class="px-3.5 py-2 rounded-xl text-xs font-extrabold transition">
+                    :class="activeTab === 'learning_book' ? 'bg-theme-accent text-white shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text border-theme-border'"
+                    class="px-3.5 py-2 rounded-xl border text-xs font-extrabold transition">
                 📚 Learning Books (13 Subjects)
             </button>
             <button @click="setTab('capstone_research')"
-                    :class="activeTab === 'capstone_research' ? 'bg-theme-accent text-white shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text'"
-                    class="px-3.5 py-2 rounded-xl text-xs font-extrabold transition">
+                    :class="activeTab === 'capstone_research' ? 'bg-theme-accent text-white shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text border-theme-border'"
+                    class="px-3.5 py-2 rounded-xl border text-xs font-extrabold transition">
                 🎓 Capstones & Researches (23 Programs)
             </button>
             <button @click="setTab('favorites')"
-                    :class="activeTab === 'favorites' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text'"
-                    class="px-3.5 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-1">
+                    :class="activeTab === 'favorites' ? 'bg-amber-500 text-slate-950 shadow border-amber-500' : 'bg-theme-main text-theme-muted hover:text-theme-text border-theme-border'"
+                    class="px-3.5 py-2 rounded-xl border text-xs font-extrabold transition flex items-center gap-1">
                 <span>★</span>
                 <span>My Starred Favorites</span>
             </button>
@@ -84,7 +84,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         class="w-full px-3 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none">
                     <option value="all">All Subjects & Programs</option>
                     <optgroup label="📚 13 Learning Book Subjects (SH01–SH09)">
-                        <?php foreach (BOOK_SUBJECTS as $code => $label): ?>
+                        <?php foreach (BOOK_SUBJECTS as $code =>$label): ?>
                             <option value="<?= e($code) ?>"><?= e($code) ?> — <?= e($label) ?></option>
                         <?php endforeach; ?>
                     </optgroup>
@@ -181,9 +181,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <?php include __DIR__ . '/../includes/map_svg.php'; ?>
     </div>
 
-    <!-- CATALOGUE GRID (Available Items First, Unavailable Items at the End) -->
+    <!-- CATALOGUE GRID -->
     <div x-show="loading" class="p-12 text-center text-theme-muted text-sm font-bold">
-        Loading 4th Floor Library Catalogue...
+        Loading OPAC Database...
     </div>
 
     <div x-show="!loading && items.length === 0" x-cloak
@@ -206,7 +206,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                   x-text="item.material_type === 'capstone_research' ? '🎓 Capstone' : '📚 Book'"></span>
                             <span class="px-2 py-0.5 rounded bg-theme-main border border-theme-border text-[10px] font-extrabold font-mono text-theme-text"
                                   x-text="item.subject_or_program"></span>
-                            <!-- Unavailable Tag -->
                             <span x-show="item.available_copies == 0"
                                   class="px-2 py-0.5 rounded bg-red-500 text-white text-[10px] font-extrabold uppercase">
                                 UNAVAILABLE
@@ -246,7 +245,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </template>
     </div>
 
-    <!-- BOOK DETAIL, MAP LOCATOR, REVIEWS (WITH DELETE) & EXPRESS BORROW MODAL -->
+    <!-- BOOK DETAIL, MAP LOCATOR, REVIEWS & EXPRESS BORROW MODAL -->
     <div x-show="selectedItem" x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5"
          x-transition>
@@ -397,7 +396,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                     <p class="text-[10px] text-theme-muted mt-1 font-mono" x-text="rev.created_at"></p>
                                 </div>
 
-                                <!-- Remove Comment Button (Visible to comment author or Librarian/Admin) -->
                                 <button x-show="rev.can_delete"
                                         type="button"
                                         @click="deleteReview(rev.id)"
@@ -424,6 +422,7 @@ function opacApp() {
         showFloorMap: false,
         showModalMap: true,
         items: [],
+        spaces: [],
         selectedItem: null,
         reviews: [],
         newReview: { rating: 5, comment: '' },
@@ -444,6 +443,11 @@ function opacApp() {
             shelf_id: 'all',
             available_only: false,
             favorites_only: false
+        },
+
+        async initOpac() {
+            this.fetchCatalog();
+            this.fetchMapSpaces();
         },
 
         setTab(tab) {
@@ -476,18 +480,6 @@ function opacApp() {
             this.fetchCatalog();
         },
 
-        isShelfHighlighted(shelfCode) {
-            if (this.selectedItem && this.selectedItem.primary_shelf === shelfCode) return true;
-            if (!this.selectedItem && this.filters.shelf_id === shelfCode) return true;
-            return false;
-        },
-
-        selectShelfFromMap(shelfCode) {
-            if (this.selectedItem) return;
-            this.filters.shelf_id = (this.filters.shelf_id === shelfCode) ? 'all' : shelfCode;
-            this.fetchCatalog();
-        },
-
         async fetchCatalog() {
             this.loading = true;
             try {
@@ -501,6 +493,41 @@ function opacApp() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        async fetchMapSpaces() {
+            const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php?action=map_status');
+            const data = await res.json();
+            if (data.success) {
+                this.spaces = data.spaces;
+            }
+        },
+
+        getSpaceColor(code, type, defaultColor) {
+            const sp = this.spaces.find(s => s.space_code === code);
+            if (!sp) return defaultColor;
+            if (sp.current_status === 'available') return type === 'bg' ? '#064e3b' : '#10b981';
+            if (sp.current_status === 'occupied') return type === 'bg' ? '#450a0a' : '#ef4444';
+            if (sp.current_status === 'reserved') return type === 'bg' ? '#422006' : '#f59e0b';
+            if (sp.current_status === 'maintenance') return type === 'bg' ? '#1e293b' : '#64748b';
+            return defaultColor;
+        },
+
+        showSpaceDetails(code) {
+            const sp = this.spaces.find(s => s.space_code === code);
+            if (sp) alert(`Space: ${sp.space_name}\nStatus: ${sp.current_status.toUpperCase()}\nCapacity: ${sp.min_capacity}-${sp.max_capacity} Pax`);
+        },
+
+        isShelfHighlighted(shelfCode) {
+            if (this.selectedItem && this.selectedItem.primary_shelf === shelfCode) return true;
+            if (!this.selectedItem && this.filters.shelf_id === shelfCode) return true;
+            return false;
+        },
+
+        selectShelfFromMap(shelfCode) {
+            if (this.selectedItem) return;
+            this.filters.shelf_id = (this.filters.shelf_id === shelfCode) ? 'all' : shelfCode;
+            this.fetchCatalog();
         },
 
         async toggleFavorite(item) {

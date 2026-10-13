@@ -1,6 +1,6 @@
 <?php
 // includes/map_svg.php
-// Interactive 4th Floor Library SVG Map (Supports shelf highlighting & click-to-filter)
+// Interactive 4th Floor Library SVG Map
 ?>
 <div class="w-full overflow-x-auto bg-slate-950 rounded-2xl border border-theme-border p-3 sm:p-4 shadow-inner select-none">
     <div class="min-w-[780px]">
@@ -9,18 +9,18 @@
             <div class="flex items-center gap-4">
                 <span class="flex items-center gap-1.5">
                     <span class="w-3 h-3 rounded-xs bg-amber-400 animate-pulse inline-block"></span>
-                    <strong class="text-amber-300">Active / Selected Shelf</strong>
+                    <strong class="text-amber-300">Active Shelf</strong>
+                </span>
+                <span class="flex items-center gap-1.5 ml-2">
+                    <span class="w-3 h-3 rounded-xs bg-[#064e3b] border border-[#10b981] inline-block"></span>
+                    <span>Available Room</span>
                 </span>
                 <span class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-xs bg-sky-600/80 border border-sky-400 inline-block"></span>
-                    <span>Learning Books (SH01–SH09)</span>
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-xs bg-indigo-600/80 border border-indigo-400 inline-block"></span>
-                    <span>Capstones & Theses (SH00, SH10–SH14)</span>
+                    <span class="w-3 h-3 rounded-xs bg-[#450a0a] border border-[#ef4444] inline-block"></span>
+                    <span>Occupied Room</span>
                 </span>
             </div>
-            <span class="text-slate-400 font-mono">Click any shelf (SH00–SH14) to inspect books</span>
+            <span class="text-slate-400 font-mono">Click any room, cubicle, or shelf (SH00–SH14)</span>
         </div>
 
         <!-- 4th Floor Architectural SVG Map -->
@@ -68,8 +68,13 @@
                 foreach ($cubicles as $idx => $letter): 
                     $cy = 82 + ($idx * 50);
                 ?>
-                    <rect x="15" y="<?= $cy ?>" width="66" height="44" rx="4" fill="#1e293b" stroke="#0089d0" stroke-width="1.2"/>
-                    <text x="48" y="<?= $cy + 26 ?>" text-anchor="middle" fill="#bae6fd" font-weight="700" font-size="10">Cubicle <?= $letter ?></text>
+                    <g @click="typeof showSpaceDetails === 'function' ? showSpaceDetails('CUBICLE-<?= $letter ?>') : null" class="cursor-pointer group">
+                        <rect x="15" y="<?= $cy ?>" width="66" height="44" rx="4"
+                              :fill="typeof getSpaceColor === 'function' ? getSpaceColor('CUBICLE-<?= $letter ?>', 'bg', '#1e293b') : '#1e293b'"
+                              :stroke="typeof getSpaceColor === 'function' ? getSpaceColor('CUBICLE-<?= $letter ?>', 'border', '#0089d0') : '#0089d0'"
+                              stroke-width="1.2" class="transition-colors duration-300 group-hover:brightness-125"/>
+                        <text x="48" y="<?= $cy + 26 ?>" text-anchor="middle" fill="#f8fafc" font-weight="700" font-size="10">Cubicle <?= $letter ?></text>
+                    </g>
                 <?php endforeach; ?>
                 <text x="102" y="235" text-anchor="middle" fill="#94a3b8" font-weight="700" font-size="10" transform="rotate(-90 102 235)" letter-spacing="1">READING HUB (CUBICLES A–F)</text>
             </g>
@@ -99,8 +104,13 @@
                 foreach ($rooms as $idx => $rLetter): 
                     $ry = 51 + ($idx * 48);
                 ?>
-                    <rect x="881" y="<?= $ry ?>" width="100" height="42" rx="4" fill="#064e3b" stroke="#10b981" stroke-width="1.2"/>
-                    <text x="931" y="<?= $ry + 25 ?>" text-anchor="middle" fill="#ecfdf5" font-weight="800" font-size="11">Room <?= $rLetter ?></text>
+                    <g @click="typeof showSpaceDetails === 'function' ? showSpaceDetails('ROOM-<?= $rLetter ?>') : null" class="cursor-pointer group">
+                        <rect x="881" y="<?= $ry ?>" width="100" height="42" rx="4"
+                              :fill="typeof getSpaceColor === 'function' ? getSpaceColor('ROOM-<?= $rLetter ?>', 'bg', '#064e3b') : '#064e3b'"
+                              :stroke="typeof getSpaceColor === 'function' ? getSpaceColor('ROOM-<?= $rLetter ?>', 'border', '#10b981') : '#10b981'"
+                              stroke-width="1.2" class="transition-colors duration-300 group-hover:brightness-125"/>
+                        <text x="931" y="<?= $ry + 25 ?>" text-anchor="middle" fill="#f8fafc" font-weight="800" font-size="11">Room <?= $rLetter ?></text>
+                    </g>
                 <?php endforeach; ?>
                 <text x="862" y="220" text-anchor="middle" fill="#34d399" font-weight="700" font-size="10" transform="rotate(-90 862 220)" letter-spacing="1">DISCUSSION ROOMS A–G (6–8 PAX)</text>
             </g>
@@ -118,10 +128,10 @@
             <text x="545" y="405" text-anchor="middle" fill="#e2e8f0" font-weight="800" font-size="11" letter-spacing="1.5">SEPARATED SHELVING UNITS (CLICK SHELF TO FILTER)</text>
 
             <!-- SH00: Single-Sided Capstone Shelf next to Teachers' Room -->
-            <g @click="selectShelfFromMap('SH00')" class="cursor-pointer group">
+            <g @click="typeof selectShelfFromMap === 'function' ? selectShelfFromMap('SH00') : null" class="cursor-pointer group">
                 <rect x="198" y="415" width="32" height="82" rx="4"
-                      :fill="isShelfHighlighted('SH00') ? '#f59e0b' : '#312e81'"
-                      :stroke="isShelfHighlighted('SH00') ? '#fef08a' : '#818cf8'"
+                      :fill="(typeof isShelfHighlighted === 'function' && isShelfHighlighted('SH00')) ? '#f59e0b' : '#312e81'"
+                      :stroke="(typeof isShelfHighlighted === 'function' && isShelfHighlighted('SH00')) ? '#fef08a' : '#818cf8'"
                       stroke-width="2" class="transition-all duration-200 group-hover:brightness-125"/>
                 <text x="214" y="456" text-anchor="middle" fill="#ffffff" font-weight="800" font-size="10" transform="rotate(-90 214 456)">SH00</text>
                 <text x="214" y="508" text-anchor="middle" fill="#a5b4fc" font-weight="700" font-size="8">CIS CAP</text>
@@ -143,12 +153,11 @@
             foreach ($mainShelves as $shCode => $meta):
                 $sx = $meta['x'];
             ?>
-                <g @click="selectShelfFromMap('<?= $shCode ?>')" class="cursor-pointer group">
+                <g @click="typeof selectShelfFromMap === 'function' ? selectShelfFromMap('<?= $shCode ?>') : null" class="cursor-pointer group">
                     <rect x="<?= $sx ?>" y="415" width="38" height="82" rx="4"
-                          :fill="isShelfHighlighted('<?= $shCode ?>') ? '#f59e0b' : '#0369a1'"
-                          :stroke="isShelfHighlighted('<?= $shCode ?>') ? '#fef08a' : '#38bdf8'"
+                          :fill="(typeof isShelfHighlighted === 'function' && isShelfHighlighted('<?= $shCode ?>')) ? '#f59e0b' : '#0369a1'"
+                          :stroke="(typeof isShelfHighlighted === 'function' && isShelfHighlighted('<?= $shCode ?>')) ? '#fef08a' : '#38bdf8'"
                           stroke-width="2" class="transition-all duration-200 group-hover:brightness-125"/>
-                    <!-- Center divider line showing Front (F) & Back (B) faces -->
                     <line x1="<?= $sx + 19 ?>" y1="417" x2="<?= $sx + 19 ?>" y2="495" stroke="#bae6fd" stroke-width="1" stroke-dasharray="2 2"/>
                     <text x="<?= $sx + 19 ?>" y="456" text-anchor="middle" fill="#ffffff" font-weight="800" font-size="10" transform="rotate(-90 <?= $sx + 19 ?> 456)"><?= $shCode ?></text>
                     <text x="<?= $sx + 19 ?>" y="508" text-anchor="middle" fill="#7dd3fc" font-weight="700" font-size="8"><?= $meta['sub'] ?></text>
@@ -167,10 +176,10 @@
             foreach ($bottomShelves as $bCode => $bMeta):
                 $bx = $bMeta['x'];
             ?>
-                <g @click="selectShelfFromMap('<?= $bCode ?>')" class="cursor-pointer group">
+                <g @click="typeof selectShelfFromMap === 'function' ? selectShelfFromMap('<?= $bCode ?>') : null" class="cursor-pointer group">
                     <rect x="<?= $bx ?>" y="520" width="115" height="28" rx="4"
-                          :fill="isShelfHighlighted('<?= $bCode ?>') ? '#f59e0b' : '#312e81'"
-                          :stroke="isShelfHighlighted('<?= $bCode ?>') ? '#fef08a' : '#818cf8'"
+                          :fill="(typeof isShelfHighlighted === 'function' && isShelfHighlighted('<?= $bCode ?>')) ? '#f59e0b' : '#312e81'"
+                          :stroke="(typeof isShelfHighlighted === 'function' && isShelfHighlighted('<?= $bCode ?>')) ? '#fef08a' : '#818cf8'"
                           stroke-width="2" class="transition-all duration-200 group-hover:brightness-125"/>
                     <text x="<?= $bx + 57 ?>" y="538" text-anchor="middle" fill="#ffffff" font-weight="800" font-size="10">
                         <?= $bCode ?> (<?= $bMeta['sub'] ?>)
