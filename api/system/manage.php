@@ -206,7 +206,8 @@ if ($action === 'save_settings') {
     $daily_fine = max(0, (float) ($input['daily_fine_rate'] ?? 10.00));
     $loan_days  = max(1, min(30, (int) ($input['loan_duration_days'] ?? 3)));
     $dev_mode   = !empty($input['dev_mode_quick_fills']) ? '1' : '0';
-    $timeout    = max(300, min(7200, (int) ($input['session_timeout_seconds'] ?? 900)));
+    // Changed the minimum from 300 to 60 here
+    $timeout    = max(60, min(7200, (int) ($input['session_timeout_seconds'] ?? 900)));
 
     $stmt = $pdo->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     $stmt->execute(['daily_fine_rate', number_format($daily_fine, 2, '.', '')]);

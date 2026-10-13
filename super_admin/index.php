@@ -191,7 +191,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </div>
             <div>
                 <label class="block font-bold text-theme-muted uppercase mb-1">Session Idle Timeout (Seconds)</label>
-                <input type="number" x-model="settings.session_timeout_seconds" required min="300" max="7200" step="60"
+                <!-- Changed min value from 300 to 60, step to 10 -->
+                <input type="number" x-model="settings.session_timeout_seconds" required min="60" max="7200" step="10"
                        class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-sm text-theme-text outline-none focus:border-theme-accent transition">
                 <p class="text-[9px] text-theme-muted mt-1 ml-1">Default 900s (15 mins). Prompts "Are you there?" 60s before log out.</p>
             </div>
