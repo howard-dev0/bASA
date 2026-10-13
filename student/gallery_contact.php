@@ -196,7 +196,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <span class="text-lg">📧</span>
                     <div>
                         <p class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">Official Email</p>
-                        <p class="font-mono font-bold text-theme-accent mt-0.5 select-all" x-text="contact.contact_email"></p>
+                        <a :href="'mailto:' + contact.contact_email" class="font-mono font-bold text-theme-accent mt-0.5 inline-block hover:underline" x-text="contact.contact_email"></a>
                     </div>
                 </div>
 
@@ -204,7 +204,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <span class="text-lg">📞</span>
                     <div>
                         <p class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">Help Desk Hotline</p>
-                        <p class="font-mono font-bold text-theme-text mt-0.5 select-all" x-text="contact.contact_phone"></p>
+                        <a :href="'tel:' + contact.contact_phone" class="font-mono font-bold text-theme-text mt-0.5 inline-block hover:underline" x-text="contact.contact_phone"></a>
                     </div>
                 </div>
 
@@ -212,7 +212,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <span class="text-lg">🌐</span>
                     <div>
                         <p class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">Social / Facebook Page</p>
-                        <p class="font-bold text-theme-accent mt-0.5" x-text="contact.contact_facebook"></p>
+                        <a :href="(contact.contact_facebook || '').startsWith('http') ? contact.contact_facebook : 'https://' + contact.contact_facebook" target="_blank" class="font-bold text-theme-accent mt-0.5 inline-block hover:underline" x-text="contact.contact_facebook"></a>
                     </div>
                 </div>
             </div>

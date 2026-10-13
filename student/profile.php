@@ -208,31 +208,31 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <!-- MODE A: STANDARD PASSWORD CHANGE -->
                 <form x-show="!forgotMode" @submit.prevent="submitRegularPasswordChange()" class="space-y-4 text-xs">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                            <label class="block font-extrabold uppercase text-theme-muted mb-1">Current Password</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+                        <div class="w-full">
+                            <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">Current Password</label>
                             <input type="password" x-model="pwForm.current_password" required placeholder="••••••••"
-                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent">
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent transition">
                         </div>
-                        <div>
-                            <label class="block font-extrabold uppercase text-theme-muted mb-1">New Password</label>
+                        <div class="w-full">
+                            <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">New Password</label>
                             <input type="password" x-model="pwForm.new_password" required minlength="6" placeholder="Min. 6 chars"
-                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent">
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent transition">
                         </div>
-                        <div>
-                            <label class="block font-extrabold uppercase text-theme-muted mb-1">Confirm New Password</label>
+                        <div class="w-full">
+                            <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">Confirm New Password</label>
                             <input type="password" x-model="pwForm.confirm_password" required minlength="6" placeholder="Repeat password"
-                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent">
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent transition">
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-between pt-1">
+                    <div class="flex flex-col sm:flex-row items-center sm:justify-between gap-3 pt-3">
                         <button type="button" @click="forgotMode = true"
-                                class="text-xs font-bold text-amber-400 hover:underline">
+                                class="text-xs font-bold text-amber-400 hover:underline text-center sm:text-left">
                             Forgot password? Send verification code instead →
                         </button>
                         <button type="submit"
-                                class="px-6 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow-lg transition">
+                                class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow-lg transition shrink-0">
                             ✓ Update Password
                         </button>
                     </div>
@@ -286,28 +286,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </div>
                     </div>
 
-                    <form @submit.prevent="submitForgotPasswordReset()" class="space-y-3 pt-1">
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                                <label class="block font-extrabold uppercase text-theme-accent mb-1">6-Digit Verification Code</label>
+                    <form @submit.prevent="submitForgotPasswordReset()" class="space-y-4 pt-1">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+                            <div class="w-full">
+                                <label class="block font-extrabold uppercase text-theme-accent mb-1 whitespace-nowrap">6-Digit Verification Code</label>
                                 <input type="text" x-model="forgotForm.otp_code" required maxlength="6" placeholder="000000"
-                                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border-2 border-theme-accent font-mono font-extrabold text-center tracking-widest text-theme-text outline-none">
+                                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border-2 border-theme-accent font-mono font-extrabold text-center tracking-widest text-theme-text outline-none transition focus:border-emerald-500">
                             </div>
-                            <div>
-                                <label class="block font-extrabold uppercase text-theme-muted mb-1">New Password</label>
+                            <div class="w-full">
+                                <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">New Password</label>
                                 <input type="password" x-model="forgotForm.new_password" required minlength="6" placeholder="Min. 6 chars"
-                                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none">
+                                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none transition focus:border-emerald-500">
                             </div>
-                            <div>
-                                <label class="block font-extrabold uppercase text-theme-muted mb-1">Confirm New Password</label>
+                            <div class="w-full">
+                                <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">Confirm New Password</label>
                                 <input type="password" x-model="forgotForm.confirm_password" required minlength="6" placeholder="Repeat password"
-                                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none">
+                                       class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none transition focus:border-emerald-500">
                             </div>
                         </div>
 
-                        <div class="flex justify-end">
+                        <div class="flex justify-end pt-2">
                             <button type="submit"
-                                    class="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg transition">
+                                    class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg transition shrink-0">
                                 🔓 Verify Code & Reset Password
                             </button>
                         </div>
@@ -350,9 +350,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <p class="font-bold text-theme-text pt-1">2. Enter the 6-digit code from your phone to confirm:</p>
                         <div class="flex gap-2">
                             <input type="text" x-model="gaVerifyCode" maxlength="6" placeholder="123456"
-                                   class="w-32 px-3 py-2 rounded-xl bg-theme-card border border-theme-border font-mono text-center font-extrabold text-sm text-theme-text outline-none">
+                                   class="w-32 px-3 py-2 rounded-xl bg-theme-card border border-theme-border font-mono text-center font-extrabold text-sm text-theme-text outline-none focus:border-emerald-500 transition">
                             <button type="button" @click="confirmGaSetup()"
-                                    class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-xs shadow">
+                                    class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow transition">
                                 Activate 2FA
                             </button>
                         </div>

@@ -9,23 +9,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 <style>
     @media print {
-        body * {
-            visibility: hidden;
-        }
-
-        #printableStickerArea,
-        #printableStickerArea * {
-            visibility: visible;
-        }
-
-        #printableStickerArea {
-            position: fixed;
-            inset: 0;
-            background: #ffffff !important;
-            color: #000000 !important;
-            padding: 16px;
-            z-index: 9999;
-        }
+        body * { visibility: hidden; }
+        #printableStickerArea, #printableStickerArea * { visibility: visible; }
+        #printableStickerArea { position: fixed; inset: 0; background: #ffffff !important; color: #000000 !important; padding: 16px; z-index: 9999; }
     }
 </style>
 
@@ -118,7 +104,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                 <p class="font-mono font-bold text-theme-text mt-1" x-text="item.subject_or_program"></p>
                             </td>
                             <td class="py-4 px-5">
-                                <span class="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono font-extrabold"
+                                <span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono font-extrabold"
                                     x-text="(item.accessions && item.accessions.length > 0) ? item.accessions[0].placement_code : 'UNASSIGNED'"></span>
                             </td>
                             <td class="py-4 px-5">
@@ -189,7 +175,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             x-model="form.subject_or_program" @change="autoAssignShelf()"
                             class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
                             <optgroup label="📚 13 Learning Book Domains (SH01–SH09)">
-                                <?php foreach (BOOK_SUBJECTS as $code => $label): ?>
+                                <?php foreach (BOOK_SUBJECTS as $code =>$label): ?>
                                     <option value="<?= e($code) ?>"><?= e($code) ?> — <?= e($label) ?></option>
                                 <?php endforeach; ?>
                             </optgroup>
@@ -199,9 +185,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <select x-show="form.material_type === 'capstone_research'" x-cloak
                             x-model="form.subject_or_program" @change="autoAssignShelf()"
                             class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
-                            <?php foreach (BCP_PROGRAMS as $cCode => $cluster): ?>
+                            <?php foreach (BCP_PROGRAMS as $cCode =>$cluster): ?>
                                 <optgroup label="🎓 <?= e($cluster['label']) ?>">
-                                    <?php foreach ($cluster['programs'] as $pCode => $pName): ?>
+                                    <?php foreach ($cluster['programs'] as $pCode =>$pName): ?>
                                         <option value="<?= e($pCode) ?>"><?= e($pCode) ?> — <?= e($pName) ?></option>
                                     <?php endforeach; ?>
                                 </optgroup>
@@ -248,7 +234,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div>
                             <label class="block text-[10px] font-bold text-theme-muted mb-1">Shelf Unit</label>
                             <select x-model="form.shelf_id" class="w-full px-2.5 py-2 rounded-lg bg-theme-card border border-theme-border font-mono text-theme-text">
-                                <?php for ($i = 0; $i <= 14; $i++): $sc = sprintf('SH%02d', $i); ?>
+                                <?php for ($i = 0; $i <= 14; $i++): $sc = sprintf('SH\%02d',$i); ?>
                                     <option value="<?= $sc ?>"><?= $sc ?></option>
                                 <?php endfor; ?>
                             </select>
@@ -339,7 +325,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 <script>
     function catalogManagerApp() {
-        // Master Shelf Auto-Mapping Lookup Table
         const SHELF_MAP = {
             'GENED': { shelf: 'SH01', side: 'F', sec: 'S1' },
             'IT': { shelf: 'SH02', side: 'F', sec: 'S1' },
@@ -354,7 +339,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
             'TM': { shelf: 'SH07', side: 'B', sec: 'S1' },
             'HM': { shelf: 'SH08', side: 'F', sec: 'S1' },
             'CRIM': { shelf: 'SH09', side: 'F', sec: 'S1' },
-            // Capstones (SH00, SH10-SH14)
             'BSIT': { shelf: 'SH00', side: 'F', sec: 'S1' },
             'BSCPE': { shelf: 'SH00', side: 'F', sec: 'S2' },
             'BEED': { shelf: 'SH10', side: 'F', sec: 'S1' },
@@ -444,8 +428,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async submitNewItem() {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'create_item', ...this.form })
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'create_item',
+                        ...this.form
+                    })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -463,8 +452,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async addExtraCopy(catalogId) {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'add_copy', catalog_id: catalogId })
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'add_copy',
+                        catalog_id: catalogId
+                    })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -475,8 +469,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async deleteItem(catalogId) {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'delete_item', catalog_id: catalogId })
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'delete_item',
+                        catalog_id: catalogId
+                    })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;

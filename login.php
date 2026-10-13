@@ -12,9 +12,13 @@ if (isset($_SESSION['user_id']) && $pdo) {
 
 $dev_mode = '1';
 if ($pdo) {
-    $stmt_dev = $pdo->query("SELECT setting_value FROM system_settings WHERE setting_key = 'dev_mode_quick_fills' LIMIT 1");
-    $val = $stmt_dev ? $stmt_dev->fetchColumn() : false;
-    if ($val !== false) $dev_mode = $val;
+    try {
+        $stmt_dev = $pdo->query("SELECT setting_value FROM system_settings WHERE setting_key = 'dev_mode_quick_fills' LIMIT 1");
+        if ($stmt_dev) {
+            $val = $stmt_dev->fetchColumn();
+            if ($val !== false) $dev_mode = $val;
+        }
+    } catch (\Throwable $e) {}
 }
 $show_quick_fills = ($dev_mode === '1');
 ?>
@@ -40,7 +44,7 @@ $show_quick_fills = ($dev_mode === '1');
                  lightMode ? 'bg-white text-slate-900' : 'bg-[#1e293b] text-white',
                  modalOk ? 'border-emerald-500' : 'border-[#D9232A]'
              ]"
-             class="w-full max-w-md border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+             class="w-full max-w-sm border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
             <div :class="modalOk ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40' : 'bg-red-500/20 text-red-500 border-red-500/40'"
                  class="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center text-2xl font-extrabold">
                 <span x-text="modalOk ? '✓' : '⚠️'"></span>
@@ -48,7 +52,7 @@ $show_quick_fills = ($dev_mode === '1');
             <div>
                 <h3 class="text-base font-extrabold" :class="modalOk ? 'text-emerald-500' : 'text-red-500'"
                     x-text="modalOk ? 'Success' : 'Authentication Notice'"></h3>
-                <p class="text-xs sm:text-sm font-semibold mt-1.5 opacity-90" x-text="modalMsg"></p>
+                <p class="text-xs sm:text-sm font-semibold mt-1.5 opacity-90 leading-relaxed" x-text="modalMsg"></p>
             </div>
             <button type="button" @click="modalMsg = ''"
                     :class="modalOk ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400' : 'bg-[#D9232A] hover:bg-red-700 text-white'"
@@ -183,22 +187,30 @@ $show_quick_fills = ($dev_mode === '1');
                     Sandbox OTP: <strong class="underline select-all" x-text="demoOtp"></strong>
                 </div>
 
-                <form @submit.prevent="submitForgotReset()" class="space-y-3">
-                    <input type="text" x-model="forgotOtp" required maxlength="6" placeholder="000000"
-                           :class="lightMode ? 'bg-slate-50 border-slate-300 text-slate-900' : 'bg-[#0f172a] border-slate-700 text-white'"
-                           class="w-full px-3.5 py-3 rounded-xl border font-mono text-center text-lg font-extrabold tracking-[0.5em] outline-none focus:border-emerald-500 transition">
-                    
-                    <div class="grid grid-cols-2 gap-2 mt-4">
-                        <input type="password" x-model="newPassword" required minlength="6" placeholder="New Password"
+                <form @submit.prevent="submitForgotReset()" class="space-y-4">
+                    <div>
+                        <label class="block text-[11px] font-extrabold uppercase mb-1.5 opacity-80 text-emerald-500">6-Digit Verification Code</label>
+                        <input type="text" x-model="forgotOtp" required maxlength="6" placeholder="000000"
                                :class="lightMode ? 'bg-slate-50 border-slate-300 text-slate-900' : 'bg-[#0f172a] border-slate-700 text-white'"
-                               class="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-emerald-500 transition">
-                        <input type="password" x-model="confirmPassword" required minlength="6" placeholder="Confirm Password"
-                               :class="lightMode ? 'bg-slate-50 border-slate-300 text-slate-900' : 'bg-[#0f172a] border-slate-700 text-white'"
-                               class="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-emerald-500 transition">
+                               class="w-full px-3.5 py-2.5 rounded-xl border font-mono text-center text-lg font-extrabold tracking-[0.5em] outline-none focus:border-emerald-500 transition">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                        <div class="w-full">
+                            <label class="block text-[11px] font-extrabold uppercase mb-1.5 opacity-80 whitespace-nowrap">New Password</label>
+                            <input type="password" x-model="newPassword" required minlength="6" placeholder="Min. 6 chars"
+                                   :class="lightMode ? 'bg-slate-50 border-slate-300 text-slate-900' : 'bg-[#0f172a] border-slate-700 text-white'"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-emerald-500 transition">
+                        </div>
+                        <div class="w-full">
+                            <label class="block text-[11px] font-extrabold uppercase mb-1.5 opacity-80 whitespace-nowrap">Confirm Password</label>
+                            <input type="password" x-model="confirmPassword" required minlength="6" placeholder="Repeat password"
+                                   :class="lightMode ? 'bg-slate-50 border-slate-300 text-slate-900' : 'bg-[#0f172a] border-slate-700 text-white'"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-emerald-500 transition">
+                        </div>
                     </div>
                     
                     <button type="submit" :disabled="loading"
-                            class="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg transition">
+                            class="w-full mt-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg transition">
                         🔓 Verify & Reset Password
                     </button>
                 </form>
