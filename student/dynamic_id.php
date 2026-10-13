@@ -20,12 +20,24 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
 
         <div class="p-7 text-center">
-            <p class="text-lg font-extrabold text-theme-text"><?= e($_SESSION['full_name']) ?></p>
-            <p class="text-xs font-mono text-theme-muted mb-6">
-                ID: <span class="text-theme-accent font-bold"><?= e($_SESSION['school_id']) ?></span> • <?= e($_SESSION['program_code'] ?? 'Faculty') ?>
-            </p>
+            <div class="flex items-center justify-between mb-4">
+                <div class="text-left">
+                    <p class="text-lg font-extrabold text-theme-text"><?= e($_SESSION['full_name']) ?></p>
+                    <p class="text-xs font-mono text-theme-muted">
+                        ID: <span class="text-theme-accent font-bold"><?= e($_SESSION['school_id']) ?></span> • <?= e($_SESSION['program_code'] ?? 'Faculty') ?>
+                    </p>
+                </div>
+                <!-- Invert QR Toggle Button -->
+                <button type="button" @click="toggleInvert()"
+                        :class="qrInverted ? 'bg-indigo-500 text-white' : 'bg-theme-main text-theme-muted border border-theme-border'"
+                        class="px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase transition shadow-sm">
+                    <span x-text="qrInverted ? '◐ Inverted QR' : '◑ Standard QR'"></span>
+                </button>
+            </div>
 
-            <div class="inline-block p-5 bg-white border-4 border-theme-accent rounded-2xl shadow-lg mb-6">
+            <!-- The QR Canvas Wrapper automatically adapts its background based on inversion state -->
+            <div :class="qrInverted ? 'bg-[#0f172a] border-indigo-500' : 'bg-white border-theme-accent'"
+                 class="inline-block p-5 border-4 rounded-2xl shadow-lg mb-6 transition-colors duration-300">
                 <div id="qrcode" class="w-52 h-52 flex items-center justify-center"></div>
             </div>
 
@@ -54,23 +66,38 @@ function dynamicQrApp() {
     return {
         secondsLeft: 30,
         timer: null,
+        qrInverted: false,
+        lastPayload: '',
+
+        toggleInvert() {
+            this.qrInverted = !this.qrInverted;
+            this.renderQr(this.lastPayload);
+        },
+
+        renderQr(payload) {
+            this.lastPayload = payload;
+            const container = document.getElementById('qrcode');
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: payload,
+                width: 208,
+                height: 208,
+                // Swap colors if inverted is true
+                colorDark: this.qrInverted ? "#ffffff" : "#0f172a",
+                colorLight: this.qrInverted ? "#0f172a" : "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        },
+
         async fetchToken() {
             const res = await fetch('<?= BASE_URL ?>/api/auth/generate_totp.php');
             const data = await res.json();
             if (data.success) {
                 this.secondsLeft = data.seconds_left;
-                const container = document.getElementById('qrcode');
-                container.innerHTML = '';
-                new QRCode(container, {
-                    text: data.qr_payload,
-                    width: 208,
-                    height: 208,
-                    colorDark: "#0f172a",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.M
-                });
+                this.renderQr(data.qr_payload);
             }
         },
+
         initQr() {
             this.fetchToken();
             this.timer = setInterval(() => {

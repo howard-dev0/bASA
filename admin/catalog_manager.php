@@ -287,7 +287,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
     </div>
 
-    <!-- MODAL 2: PRINTABLE BOOK QR STICKER SHEET -->
+    <!-- MODAL 2: PRINTABLE BOOK QR STICKER SHEET (With Invert Option) -->
     <div x-show="showPrintModal" x-cloak
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
         x-transition>
@@ -299,6 +299,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <p class="text-xs text-theme-muted">Contains compact Version-2 QR matrix + Accession ID + 4th Floor Shelf Placement Code</p>
                 </div>
                 <div class="flex items-center gap-2">
+                    <!-- Toggle Inverted Stickers -->
+                    <button @click="toggleInvert()" type="button"
+                            :class="qrInverted ? 'bg-indigo-500 text-white' : 'bg-theme-main text-theme-muted border border-theme-border'"
+                            class="px-3 py-2 rounded-xl text-xs font-extrabold shadow transition">
+                        <span x-text="qrInverted ? '◐ Inverted Stickers' : '◑ Standard Stickers'"></span>
+                    </button>
+
                     <button @click="window.print()" class="px-4 py-2 rounded-xl bg-theme-accent text-white text-xs font-extrabold shadow">
                         🖨️ Print Sticker Sheet
                     </button>
@@ -306,15 +313,26 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </div>
             </div>
 
-            <div id="printableStickerArea" class="p-6 overflow-y-auto bg-white text-slate-900 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <!-- Print Area: Automatically adjusts colors via style injection for @media print -->
+            <div id="printableStickerArea" class="p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
+                 :style="qrInverted ? 'background-color: #0f172a !important; color: #ffffff !important; color-adjust: exact; -webkit-print-color-adjust: exact;' : 'background-color: #ffffff !important; color: #000000 !important; color-adjust: exact; -webkit-print-color-adjust: exact;'">
+                
                 <template x-for="st in selectedStickers" :key="st.accession_no">
-                    <div class="p-4 border-2 border-slate-900 rounded-xl flex flex-col items-center text-center bg-white">
-                        <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">BCP 4TH FLOOR LIBRARY • bASA</p>
-                        <div :id="'sticker-qr-' + st.accession_no" class="my-2.5 p-2 bg-white"></div>
-                        <p class="font-mono text-xs font-extrabold text-slate-950" x-text="st.accession_no"></p>
-                        <p class="mt-1 px-2.5 py-0.5 rounded bg-slate-900 text-white font-mono text-xs font-extrabold"
-                            x-text="'SHELF: ' + st.placement_code"></p>
-                        <p class="text-[10px] font-bold text-slate-600 mt-1 line-clamp-1" x-text="st.title"></p>
+                    <div class="p-4 border-2 rounded-xl flex flex-col items-center text-center transition-colors duration-300"
+                         :class="qrInverted ? 'border-slate-500 bg-[#0f172a]' : 'border-slate-900 bg-white'">
+                        <p class="text-[10px] font-extrabold uppercase tracking-wider"
+                           :class="qrInverted ? 'text-slate-400' : 'text-slate-600'">BCP 4TH FLOOR LIBRARY • bASA</p>
+                        
+                        <!-- Adaptive QR Container for Stickers -->
+                        <div :id="'sticker-qr-' + st.accession_no" class="my-2.5 p-2 rounded" :class="qrInverted ? 'bg-[#0f172a]' : 'bg-white'"></div>
+                        
+                        <p class="font-mono text-xs font-extrabold"
+                           :class="qrInverted ? 'text-white' : 'text-slate-950'" x-text="st.accession_no"></p>
+                        <p class="mt-1 px-2.5 py-0.5 rounded font-mono text-xs font-extrabold"
+                           :class="qrInverted ? 'bg-slate-700 text-white' : 'bg-slate-900 text-white'"
+                           x-text="'SHELF: ' + st.placement_code"></p>
+                        <p class="text-[10px] font-bold mt-1 line-clamp-1"
+                           :class="qrInverted ? 'text-slate-400' : 'text-slate-600'" x-text="st.title"></p>
                     </div>
                 </template>
             </div>
@@ -371,6 +389,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             selectedStickers: [],
             alertMsg: '',
             alertOk: true,
+            qrInverted: false, // State for Sticker Inversion
 
             form: {
                 material_type: 'learning_book',
@@ -428,13 +447,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async submitNewItem() {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'create_item',
-                        ...this.form
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'create_item', ...this.form })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -452,13 +466,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async addExtraCopy(catalogId) {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'add_copy',
-                        catalog_id: catalogId
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'add_copy', catalog_id: catalogId })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -469,13 +478,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
             async deleteItem(catalogId) {
                 const res = await fetch('<?= BASE_URL ?>/api/catalog/manage.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'delete_item',
-                        catalog_id: catalogId
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_item', catalog_id: catalogId })
                 });
                 const data = await res.json();
                 this.alertMsg = data.message;
@@ -499,6 +503,30 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 }
             },
 
+            toggleInvert() {
+                this.qrInverted = !this.qrInverted;
+                this.renderPrintStickers();
+            },
+
+            renderPrintStickers() {
+                setTimeout(() => {
+                    this.selectedStickers.forEach(st => {
+                        const el = document.getElementById('sticker-qr-' + st.accession_no);
+                        if (el) {
+                            el.innerHTML = '';
+                            new QRCode(el, {
+                                text: st.accession_no,
+                                width: 112,
+                                height: 112,
+                                colorDark: this.qrInverted ? "#ffffff" : "#000000",
+                                colorLight: this.qrInverted ? "#0f172a" : "#ffffff", // Use a dark slate to match
+                                correctLevel: QRCode.CorrectLevel.M
+                            });
+                        }
+                    });
+                }, 100);
+            },
+
             openPrintAllStickers() {
                 if (this.selectedStickers.length === 0) {
                     this.items.forEach(item => {
@@ -512,22 +540,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     });
                 }
                 this.showPrintModal = true;
-                setTimeout(() => {
-                    this.selectedStickers.forEach(st => {
-                        const el = document.getElementById('sticker-qr-' + st.accession_no);
-                        if (el) {
-                            el.innerHTML = '';
-                            new QRCode(el, {
-                                text: st.accession_no,
-                                width: 112,
-                                height: 112,
-                                colorDark: "#000000",
-                                colorLight: "#ffffff",
-                                correctLevel: QRCode.CorrectLevel.M
-                            });
-                        }
-                    });
-                }, 100);
+                this.renderPrintStickers();
             }
         };
     }

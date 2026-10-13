@@ -337,24 +337,36 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </div>
 
-                <div x-show="gaSetupOpen" x-cloak x-transition class="p-4 rounded-xl bg-theme-main border border-theme-border flex flex-col sm:flex-row items-center gap-5">
-                    <div class="p-3 bg-white rounded-xl border-2 border-theme-accent shrink-0">
-                        <div id="gaQrCanvas" class="w-36 h-36 flex items-center justify-center"></div>
-                    </div>
-                    <div class="space-y-2 text-xs flex-1">
-                        <p class="font-bold text-theme-text">1. Scan this QR code in the Google Authenticator app</p>
-                        <p class="text-[11px] text-theme-muted">
-                            Manual Base32 Setup Key:
-                            <span class="px-2 py-0.5 rounded bg-theme-card border border-theme-border font-mono font-extrabold text-amber-400 select-all" x-text="gaSecret"></span>
-                        </p>
-                        <p class="font-bold text-theme-text pt-1">2. Enter the 6-digit code from your phone to confirm:</p>
-                        <div class="flex gap-2">
-                            <input type="text" x-model="gaVerifyCode" maxlength="6" placeholder="123456"
-                                   class="w-32 px-3 py-2 rounded-xl bg-theme-card border border-theme-border font-mono text-center font-extrabold text-sm text-theme-text outline-none focus:border-emerald-500 transition">
-                            <button type="button" @click="confirmGaSetup()"
-                                    class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow transition">
-                                Activate 2FA
+                <div x-show="gaSetupOpen" x-cloak x-transition class="p-5 rounded-xl bg-theme-main border border-theme-border flex flex-col sm:flex-row items-start gap-6">
+                    <div class="space-y-2 shrink-0 w-full sm:w-auto">
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="font-bold text-theme-text text-xs">1. Scan this QR code</p>
+                            <button type="button" @click="toggleGaQrInvert()"
+                                    :class="gaQrInverted ? 'bg-indigo-500 text-white' : 'bg-theme-card text-theme-muted border border-theme-border'"
+                                    class="px-2 py-1 rounded-lg text-[9px] font-extrabold uppercase transition shadow-sm">
+                                <span x-text="gaQrInverted ? '◐ Inverted' : '◑ Standard'"></span>
                             </button>
+                        </div>
+                        <div class="p-3 rounded-xl border-2 transition-colors duration-300 flex justify-center"
+                             :class="gaQrInverted ? 'bg-[#0f172a] border-indigo-500' : 'bg-white border-theme-accent'">
+                            <div id="gaQrCanvas" class="w-36 h-36 flex items-center justify-center"></div>
+                        </div>
+                    </div>
+                    <div class="space-y-3 text-xs flex-1 w-full pt-1">
+                        <div>
+                            <p class="text-[11px] text-theme-muted mb-1">Manual Base32 Setup Key:</p>
+                            <span class="px-2.5 py-1 rounded-lg bg-theme-card border border-theme-border font-mono font-extrabold text-amber-400 select-all tracking-widest inline-block" x-text="gaSecret"></span>
+                        </div>
+                        <div class="pt-2 border-t border-theme-border/50">
+                            <p class="font-bold text-theme-text mb-2">2. Enter the 6-digit code from your phone to confirm:</p>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <input type="text" x-model="gaVerifyCode" maxlength="6" placeholder="123456"
+                                       class="w-full sm:w-32 px-3 py-2.5 rounded-xl bg-theme-card border border-theme-border font-mono text-center font-extrabold text-sm text-theme-text outline-none focus:border-emerald-500 transition">
+                                <button type="button" @click="confirmGaSetup()"
+                                        class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow transition">
+                                    Activate 2FA
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -375,6 +387,8 @@ function profileSecurityApp() {
         gaSetupOpen: false,
         gaSecret: '',
         gaVerifyCode: '',
+        gaOtpauthUri: '',
+        gaQrInverted: false,
         demoOtpCode: '',
 
         profile: {
@@ -533,6 +547,29 @@ function profileSecurityApp() {
             }
         },
 
+        toggleGaQrInvert() {
+            this.gaQrInverted = !this.gaQrInverted;
+            if (this.gaOtpauthUri) {
+                this.renderGaQr(this.gaOtpauthUri);
+            }
+        },
+
+        renderGaQr(uri) {
+            this.gaOtpauthUri = uri;
+            const el = document.getElementById('gaQrCanvas');
+            if (el) {
+                el.innerHTML = '';
+                new QRCode(el, {
+                    text: uri,
+                    width: 144,
+                    height: 144,
+                    colorDark: this.gaQrInverted ? "#ffffff" : "#0f172a",
+                    colorLight: this.gaQrInverted ? "#0f172a" : "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+        },
+
         async startGaSetup() {
             try {
                 const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
@@ -545,18 +582,7 @@ function profileSecurityApp() {
                     this.gaSecret = data.secret;
                     this.gaSetupOpen = true;
                     this.$nextTick(() => {
-                        const el = document.getElementById('gaQrCanvas');
-                        if (el) {
-                            el.innerHTML = '';
-                            new QRCode(el, {
-                                text: data.otpauth_uri,
-                                width: 144,
-                                height: 144,
-                                colorDark: "#0f172a",
-                                colorLight: "#ffffff",
-                                correctLevel: QRCode.CorrectLevel.M
-                            });
-                        }
+                        this.renderGaQr(data.otpauth_uri);
                     });
                 }
             } catch (e) {

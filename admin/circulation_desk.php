@@ -1,12 +1,13 @@
 <?php
 // admin/circulation_desk.php
+// hello
 $page_title = 'Webcam QR Circulation Desk';
 require_once __DIR__ . '/../includes/header.php';
 require_role(['librarian', 'super_admin']);
 
-$pdo = $GLOBALS['pdo'];
+$pdo =$GLOBALS['pdo'];
 
-$sample_accessions = $pdo->query("
+$sample_accessions =$pdo->query("
     SELECT ia.accession_no, ia.status, ci.title 
     FROM item_accessions ia 
     JOIN catalog_items ci ON ia.catalog_id = ci.id 
@@ -16,6 +17,13 @@ $sample_accessions = $pdo->query("
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+    /* CSS Filter to digitally invert the visual camera feed on the screen */
+    .qr-invert-active video {
+        filter: invert(1) hue-rotate(180deg) contrast(1.5) brightness(1.2);
+    }
+</style>
 
 <div x-data="circulationDeskApp()" x-init="loadRecentActivity()" @keydown.escape.window="alertMsg = ''" class="space-y-6">
 
@@ -36,7 +44,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="alertMsg"></p>
             </div>
             <button type="button" @click="alertMsg = ''"
-                    :class="alertSuccess ? 'bg-emerald-500 text-slate-950' : 'bg-[#D9232A] text-white'"
+                    :class="alertSuccess ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400' : 'bg-[#D9232A] hover:bg-red-700 text-white'"
                     class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
                 OK
             </button>
@@ -53,13 +61,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 Webcam QR Scanner & Closed-Loop Circulation
             </h1>
             <p class="text-xs text-theme-muted mt-0.5">
-                Scan a Student's <strong>30s Dynamic QR Pass</strong> + <strong>Book QR Sticker</strong> (or scan a single <strong>Express Borrow / Return QR</strong>) to issue or return literature.
+                Scan a Student's <strong>30s Dynamic QR Pass</strong> + <strong>Book QR Sticker</strong> to issue or return literature.
             </p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2.5 shrink-0">
             <button @click="toggleCamera()"
-                    :class="cameraActive ? 'bg-[#D9232A] text-white' : 'bg-theme-accent text-white'"
+                    :class="cameraActive ? 'bg-[#D9232A] text-white hover:bg-red-700' : 'bg-theme-accent hover:bg-theme-accentHover text-white'"
                     class="px-4 py-2.5 rounded-xl text-xs font-extrabold shadow transition flex items-center gap-2">
                 <span x-text="cameraActive ? '⏹ Stop Webcam' : '📷 Start Webcam Scanner'"></span>
             </button>
@@ -79,24 +87,86 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <div class="flex items-center justify-between mb-3">
                     <h2 class="text-sm font-extrabold text-theme-text">Optical Webcam Viewport</h2>
                     <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase"
-                          :class="cameraActive ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' : 'bg-theme-main text-theme-muted'"
+                          :class="cameraActive ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' : 'bg-theme-main text-theme-muted border border-theme-border'"
                           x-text="cameraActive ? '● CAMERA LIVE' : 'STANDBY'"></span>
                 </div>
 
-                <div class="w-full min-h-[250px] bg-slate-950 rounded-xl border-2 border-dashed border-theme-border overflow-hidden flex flex-col items-center justify-center relative">
-                    <div id="qr-reader" class="w-full"></div>
-                    <div x-show="!cameraActive" class="p-6 text-center space-y-2">
+                <div class="w-full min-h-[260px] bg-slate-950 rounded-xl border-2 border-dashed border-theme-border overflow-hidden flex flex-col items-center justify-center relative">
+                    <!-- The Scanner Target (Binds the invert CSS class) -->
+                    <div id="qr-reader" class="w-full relative z-0" :class="{ 'qr-invert-active': camInvert }"></div>
+                    
+                    <!-- Processing Overlay to prevent rapid-fire scanning -->
+                    <div x-show="isProcessing" class="absolute inset-0 bg-black/60 z-10 flex flex-col items-center justify-center backdrop-blur-sm">
+                        <span class="px-4 py-2 bg-theme-accent text-white font-extrabold text-xs rounded-full shadow-lg animate-pulse">⏳ Processing Scan...</span>
+                    </div>
+
+                    <div x-show="!cameraActive" class="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center space-y-2 bg-slate-950">
                         <p class="text-xs font-bold text-slate-300">Webcam Scanner is in Standby</p>
                         <p class="text-[11px] text-slate-400">Click <strong>Start Webcam Scanner</strong> above to scan via camera, or use the manual/simulator input below.</p>
+                    </div>
+                </div>
+
+                <!-- HARDWARE CAMERA CONTROLS (ZOOM, EXPOSURE, TORCH, INVERT) -->
+                <div x-show="cameraActive" x-transition class="mt-4 p-4 rounded-xl bg-theme-main border border-theme-border space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-theme-border pb-3">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-theme-muted">Hardware Lens Controls</span>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <!-- Hardware Pixel Inversion Toggle -->
+                            <button @click="toggleInvert()" type="button"
+                                    :class="camInvert ? 'bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.4)]' : 'bg-slate-700 text-white'"
+                                    class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase flex items-center gap-1 transition">
+                                <span x-text="camInvert ? '◐ Invert: ON' : '◐ Invert: OFF'"></span>
+                            </button>
+
+                            <!-- Torch / Flashlight Toggle Button -->
+                            <button x-show="hasTorch" @click="toggleTorch()" type="button"
+                                    :class="camTorchEnabled ? 'bg-amber-400 text-slate-950 shadow-[0_0_10px_rgba(251,191,36,0.4)]' : 'bg-slate-700 text-white'"
+                                    class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase flex items-center gap-1 transition">
+                                <span x-text="camTorchEnabled ? '🔦 Flash On' : '🔦 Flash Off'"></span>
+                            </button>
+                            
+                            <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-[9px] font-bold uppercase" x-text="hwFocusMode"></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- Zoom Slider -->
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg" title="Zoom">🔍</span>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-[10px] font-extrabold uppercase text-theme-muted">Optical Zoom</label>
+                                    <span class="text-[10px] font-mono text-theme-accent font-bold" x-text="camZoom + 'x'"></span>
+                                </div>
+                                <input type="range" x-model="camZoom" @input="updateCameraSettings()" :min="minZoom" :max="maxZoom" step="0.1"
+                                       class="w-full accent-theme-accent cursor-pointer">
+                            </div>
+                        </div>
+
+                        <!-- Exposure Slider -->
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg" title="Exposure">☀️</span>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-[10px] font-extrabold uppercase text-theme-muted">Exposure Comp</label>
+                                    <span class="text-[10px] font-mono text-amber-400 font-bold" x-text="camExposure"></span>
+                                </div>
+                                <input type="range" x-model="camExposure" @input="updateCameraSettings()" :min="minExposure" :max="maxExposure" step="0.5"
+                                       class="w-full accent-amber-500 cursor-pointer">
+                            </div>
+                        </div>
+                        <p class="text-[9px] text-theme-muted leading-relaxed">
+                            * Use the <strong>Flashlight</strong> in dark rooms. If scanning a very bright phone screen in a dark room, <strong>Zoom in</strong> to force the camera to auto-dim and expose the QR code correctly.
+                        </p>
                     </div>
                 </div>
 
                 <form @submit.prevent="submitScan(manualInput)" class="mt-4 flex gap-2">
                     <input type="text" x-model="manualInput"
                            placeholder="Paste QR payload or Accession (e.g. BCP-BOK-IT-00001)"
-                           class="flex-1 px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs font-mono text-theme-text outline-none focus:border-theme-accent">
-                    <button type="submit"
-                            class="px-4 py-2.5 rounded-xl bg-theme-accent text-white text-xs font-extrabold shrink-0">
+                           class="flex-1 px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs font-mono text-theme-text outline-none focus:border-theme-accent transition">
+                    <button type="submit" :disabled="isProcessing"
+                            class="px-4 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white text-xs font-extrabold shrink-0 shadow transition disabled:opacity-50">
                         Decode
                     </button>
                 </form>
@@ -116,7 +186,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </button>
                     </div>
                     <div class="flex flex-wrap gap-1.5">
-                        <?php foreach ($sample_accessions as $sa): ?>
+                        <?php foreach ($sample_accessions as$sa): ?>
                             <button type="button" @click="submitScan('<?= e($sa['accession_no']) ?>')"
                                     class="px-2.5 py-1.5 rounded-lg bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-mono font-bold text-theme-text transition">
                                 📘 <?= e($sa['accession_no']) ?>
@@ -131,9 +201,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div class="xl:col-span-7 space-y-4">
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- TIER 1: BORROWER 2x2 IDENTITY VERIFICATION CARD (Shows Uploaded Photo) -->
-                <div class="bg-theme-card border-2 rounded-2xl p-5 transition"
-                     :class="scannedStudent ? 'border-emerald-500/60' : 'border-theme-border'">
+                <!-- TIER 1: BORROWER 2x2 IDENTITY VERIFICATION CARD -->
+                <div class="bg-theme-card border-2 rounded-2xl p-5 transition-colors duration-300"
+                     :class="scannedStudent ? 'border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-theme-border shadow-xs'">
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">Tier 1 • Borrower Verification</span>
                         <span x-show="scannedStudent" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-extrabold">
@@ -168,8 +238,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </div>
 
                 <!-- TIER 2: LITERATURE & ACCESSION STICKER VERIFICATION CARD -->
-                <div class="bg-theme-card border-2 rounded-2xl p-5 transition"
-                     :class="scannedBook ? 'border-theme-accent' : 'border-theme-border'">
+                <div class="bg-theme-card border-2 rounded-2xl p-5 transition-colors duration-300"
+                     :class="scannedBook ? 'border-theme-accent shadow-[0_0_15px_rgba(0,137,208,0.1)]' : 'border-theme-border shadow-xs'">
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">Tier 2 • Physical Book Verification</span>
                         <template x-if="scannedBook">
@@ -210,7 +280,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
                     <div class="flex items-center gap-2">
                         <label class="text-xs font-bold text-theme-muted">Loan Days:</label>
-                        <select x-model="loanDays" class="px-3 py-1.5 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text">
+                        <select x-model="loanDays" class="px-3 py-1.5 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text outline-none">
                             <option value="1">1 Day (Overnight)</option>
                             <option value="3">3 Days (Standard)</option>
                             <option value="7">7 Days (Faculty/Thesis)</option>
@@ -254,7 +324,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div x-show="scannedBook?.active_loan?.computed_fine > 0" class="flex flex-wrap items-center gap-3">
                     <label class="text-xs font-extrabold text-theme-text">Fine Settlement Status:</label>
-                    <select x-model="returnFineStatus" class="px-3 py-2 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text">
+                    <select x-model="returnFineStatus" class="px-3 py-2 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text outline-none">
                         <option value="paid">Paid at Help Desk Counter</option>
                         <option value="unpaid">Log as Unpaid Balance on Student Account</option>
                         <option value="waived">Waive Fine (Logs to Security Audit Trail)</option>
@@ -313,6 +383,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
 </div>
 
 <script>
+// =========================================================================================
+// MASSIVE EFFICIENCY UPGRADE: Canvas Image Data Interceptor for Dark-Mode QR Reading
+// =========================================================================================
+window.basaCamInvertEnabled = false;
+const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+
+CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h, settings) {
+    const imageData = originalGetImageData.call(this, x, y, w, h, settings);
+    
+    // If inversion is ON, physically flip the RGB values in memory before passing to the scanner
+    if (window.basaCamInvertEnabled) {
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            data[i]     = 255 - data[i];       // Red
+            data[i + 1] = 255 - data[i + 1];   // Green
+            data[i + 2] = 255 - data[i + 2];   // Blue
+            // Alpha (data[i+3]) remains unchanged
+        }
+    }
+    return imageData;
+};
+
 function circulationDeskApp() {
     return {
         cameraActive: false,
@@ -323,8 +415,27 @@ function circulationDeskApp() {
         loanDays: 3,
         returnFineStatus: 'paid',
         recentLogs: [],
+        
+        // Scan State
+        isProcessing: false,
+        lastScannedCode: '',
+        
+        // Alert Modal
         alertMsg: '',
         alertSuccess: true,
+
+        // Hardware Controls
+        camTrack: null,
+        camZoom: 1,
+        minZoom: 1,
+        maxZoom: 5,
+        camExposure: 0,
+        minExposure: -3,
+        maxExposure: 3,
+        camTorchEnabled: false,
+        hasTorch: false,
+        camInvert: false, 
+        hwFocusMode: 'Auto-Focus Disabled',
 
         showToast(msg, ok = true) {
             this.alertMsg = msg;
@@ -336,6 +447,7 @@ function circulationDeskApp() {
             this.scannedBook = null;
             this.manualInput = '';
             this.alertMsg = '';
+            this.lastScannedCode = '';
         },
 
         async loadRecentActivity() {
@@ -344,55 +456,178 @@ function circulationDeskApp() {
             if (data.success) this.recentLogs = data.logs;
         },
 
+        toggleInvert() {
+            this.camInvert = !this.camInvert;
+            window.basaCamInvertEnabled = this.camInvert;
+        },
+
         async toggleCamera() {
             if (this.cameraActive) {
                 if (this.html5QrCode) {
+                    if (this.camTrack && this.hasTorch && this.camTorchEnabled) {
+                        this.camTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(()=>{});
+                    }
                     await this.html5QrCode.stop();
                     this.html5QrCode.clear();
                 }
                 this.cameraActive = false;
+                this.camTrack = null;
+                this.hasTorch = false;
+                this.camTorchEnabled = false;
+                this.camInvert = false;
+                window.basaCamInvertEnabled = false;
                 return;
             }
 
             try {
-                this.html5QrCode = new Html5Qrcode("qr-reader");
+                // MASSIVE SPEED BOOST: Restrict scanning strictly to QR Codes.
+                const formatsToSupport = [ Html5QrcodeSupportedFormats.QR_CODE ];
+
+                this.html5QrCode = new Html5Qrcode("qr-reader", { formatsToSupport: formatsToSupport });
                 this.cameraActive = true;
+                this.hwFocusMode = 'Calibrating Lens...';
+                
+                const cameraConfig = { facingMode: "environment" };
+
                 await this.html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 220, height: 220 } },
+                    cameraConfig,
+                    { 
+                        fps: 20, // Doubled from 10 to 20 for instant recognition
+                        qrbox: (viewfinderWidth, viewfinderHeight) => {
+                            // Responsive Viewfinder: 75% of screen for easier targeting
+                            let minEdgePercentage = 0.75; 
+                            let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                            let qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+                            return { width: qrboxSize, height: qrboxSize };
+                        },
+                        aspectRatio: 1.0,
+                        disableFlip: false // Allows reading mirrored QRs from front-cams
+                    },
                     (decodedText) => {
                         this.submitScan(decodedText);
                     },
-                    () => {}
+                    (err) => {} // Suppress internal not-found warnings to prevent console flood
                 );
+
+                // Delay capability probing slightly to let the WebRTC stream initialize
+                setTimeout(() => {
+                    const video = document.querySelector('#qr-reader video');
+                    if (video && video.srcObject) {
+                        this.camTrack = video.srcObject.getVideoTracks()[0];
+                        if (this.camTrack && typeof this.camTrack.getCapabilities === 'function') {
+                            const caps = this.camTrack.getCapabilities();
+                            
+                            if (caps.zoom) {
+                                this.minZoom = caps.zoom.min || 1;
+                                this.maxZoom = caps.zoom.max || 5;
+                                this.camZoom = this.minZoom;
+                            }
+                            if (caps.exposureCompensation) {
+                                this.minExposure = caps.exposureCompensation.min || -3;
+                                this.maxExposure = caps.exposureCompensation.max || 3;
+                                this.camExposure = 0;
+                            }
+                            if (caps.torch) {
+                                this.hasTorch = true;
+                            }
+                            if (caps.focusMode && caps.focusMode.includes('continuous')) {
+                                this.hwFocusMode = 'Continuous Auto-Focus Active';
+                            } else {
+                                this.hwFocusMode = 'Fixed Focus Mode';
+                            }
+                            
+                            this.updateCameraSettings();
+                        } else {
+                            this.hwFocusMode = 'Hardware Constraints Blocked by Browser';
+                        }
+                    }
+                }, 1500);
+
             } catch (err) {
                 this.cameraActive = false;
-                this.showToast("Camera permission denied or no webcam detected. Use the simulator buttons below.", false);
+                this.showToast("Camera permission denied, blocked by browser, or no webcam detected. Use the simulator buttons below.", false);
+            }
+        },
+
+        toggleTorch() {
+            if (!this.hasTorch || !this.camTrack) return;
+            this.camTorchEnabled = !this.camTorchEnabled;
+            this.updateCameraSettings();
+        },
+
+        updateCameraSettings() {
+            if (!this.camTrack || typeof this.camTrack.applyConstraints !== 'function') return;
+            
+            const caps = this.camTrack.getCapabilities();
+            let advancedObj = {};
+            
+            if (caps.zoom && this.camZoom > this.minZoom) {
+                advancedObj.zoom = parseFloat(this.camZoom);
+            }
+            if (caps.exposureCompensation && this.camExposure !== 0) {
+                advancedObj.exposureCompensation = parseFloat(this.camExposure);
+            }
+            if (caps.focusMode && caps.focusMode.includes('continuous')) {
+                advancedObj.focusMode = "continuous";
+            }
+            if (this.hasTorch) {
+                advancedObj.torch = this.camTorchEnabled;
+            }
+            
+            if (Object.keys(advancedObj).length > 0) {
+                this.camTrack.applyConstraints({ advanced: [advancedObj] }).catch(e => {
+                    console.warn("Hardware does not support this exact constraint combination.");
+                });
             }
         },
 
         async submitScan(codeString) {
-            if (!codeString) return;
-            const res = await fetch('<?= BASE_URL ?>/api/circulation/process.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'scan_decode', qr_code: codeString })
-            });
-            const data = await res.json();
-            if (!data.success) {
-                this.showToast(data.message, false);
+            // Drop empty codes or if we are already fetching
+            if (!codeString || this.isProcessing) return;
+
+            // Debouncer: If the same code is scanned immediately, ignore it.
+            if (codeString === this.lastScannedCode) return;
+
+            // Optional lock: If we already have BOTH a student AND an available book ready for checkout, 
+            // pause further scanning until the librarian presses "Issue" or "Clear"
+            if (this.scannedStudent && this.scannedBook && this.scannedBook.status === 'available') {
+                return; 
             }
 
-            if (data.success) {
-                if (data.scan_type === 'student_qr') {
-                    this.scannedStudent = data.student;
-                } else if (data.scan_type === 'book_qr') {
-                    this.scannedBook = data.book;
-                } else if (data.scan_type === 'express_combo') {
-                    this.scannedStudent = data.student;
-                    this.scannedBook = data.book;
+            this.lastScannedCode = codeString;
+            this.isProcessing = true;
+            
+            try {
+                const res = await fetch('<?= BASE_URL ?>/api/circulation/process.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'scan_decode', qr_code: codeString })
+                });
+                const data = await res.json();
+                
+                if (!data.success) {
+                    this.showToast(data.message, false);
+                } else {
+                    this.showToast(data.message, true);
+                    if (data.scan_type === 'student_qr') {
+                        this.scannedStudent = data.student;
+                    } else if (data.scan_type === 'book_qr') {
+                        this.scannedBook = data.book;
+                    } else if (data.scan_type === 'express_combo') {
+                        this.scannedStudent = data.student;
+                        this.scannedBook = data.book;
+                    }
+                    this.manualInput = '';
                 }
-                this.manualInput = '';
+            } catch (err) {
+                this.showToast("Network error or invalid QR payload format.", false);
+            } finally {
+                // Remove the processing overlay and allow the next unique scan
+                setTimeout(() => { 
+                    this.isProcessing = false; 
+                    // Clear the last scanned code after 3 seconds so they can rescan it if needed later
+                    setTimeout(() => { this.lastScannedCode = ''; }, 3000);
+                }, 800);
             }
         },
 
@@ -412,6 +647,7 @@ function circulationDeskApp() {
             this.showToast(data.message, data.success);
             if (data.success) {
                 this.scannedBook = null;
+                this.lastScannedCode = ''; // Allow scanning a new book immediately
                 await this.loadRecentActivity();
             }
         },
@@ -431,6 +667,7 @@ function circulationDeskApp() {
             this.showToast(data.message, data.success);
             if (data.success) {
                 this.scannedBook = null;
+                this.lastScannedCode = ''; // Allow scanning a new return book immediately
                 await this.loadRecentActivity();
             }
         }

@@ -173,7 +173,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <?php endif; ?>
     </div>
 
-    <!-- RETURN BOOK QR MODAL -->
+    <!-- RETURN BOOK QR MODAL (With Invert Option) -->
     <div x-show="returnModalOpen" x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
          x-transition>
@@ -194,8 +194,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </p>
                 </div>
 
-                <!-- High-Contrast White QR Container -->
-                <div class="inline-block p-4 bg-white border-4 border-emerald-500 rounded-2xl shadow-lg">
+                <div class="flex items-center justify-center gap-4 mb-2">
+                    <button type="button" @click="toggleInvert()"
+                            :class="qrInverted ? 'bg-indigo-500 text-white' : 'bg-theme-main text-theme-muted border border-theme-border'"
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase transition shadow-sm">
+                        <span x-text="qrInverted ? '◐ Inverted QR' : '◑ Standard QR'"></span>
+                    </button>
+                </div>
+
+                <!-- Adaptive QR Container -->
+                <div class="inline-block p-4 rounded-2xl border-4 shadow-lg transition-colors duration-300"
+                     :class="qrInverted ? 'bg-[#0f172a] border-indigo-500' : 'bg-white border-emerald-500'">
                     <div id="returnQrCanvas" class="w-48 h-48 flex items-center justify-center"></div>
                 </div>
 
@@ -222,6 +231,31 @@ function myBorrowedBooksApp() {
         activeShelf: '',
         secondsLeft: 30,
         timer: null,
+        qrInverted: false,
+        lastPayload: '',
+
+        toggleInvert() {
+            this.qrInverted = !this.qrInverted;
+            if (this.lastPayload) {
+                this.renderQr(this.lastPayload);
+            }
+        },
+
+        renderQr(payload) {
+            this.lastPayload = payload;
+            const container = document.getElementById('returnQrCanvas');
+            if (container) {
+                container.innerHTML = '';
+                new QRCode(container, {
+                    text: payload,
+                    width: 192,
+                    height: 192,
+                    colorDark: this.qrInverted ? "#ffffff" : "#0f172a",
+                    colorLight: this.qrInverted ? "#0f172a" : "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+        },
 
         async openReturnQr(accessionNo, title, shelfCode) {
             this.activeAccession = accessionNo;
@@ -239,18 +273,7 @@ function myBorrowedBooksApp() {
                 const data = await res.json();
                 if (data.success) {
                     this.secondsLeft = data.seconds_left;
-                    const container = document.getElementById('returnQrCanvas');
-                    if (container) {
-                        container.innerHTML = '';
-                        new QRCode(container, {
-                            text: data.qr_payload,
-                            width: 192,
-                            height: 192,
-                            colorDark: "#0f172a",
-                            colorLight: "#ffffff",
-                            correctLevel: QRCode.CorrectLevel.M
-                        });
-                    }
+                    this.renderQr(data.qr_payload);
                 }
             };
 

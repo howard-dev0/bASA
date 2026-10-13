@@ -84,7 +84,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         class="w-full px-3 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none">
                     <option value="all">All Subjects & Programs</option>
                     <optgroup label="📚 13 Learning Book Subjects (SH01–SH09)">
-                        <?php foreach (BOOK_SUBJECTS as $code =>$label): ?>
+                        <?php foreach (BOOK_SUBJECTS as $code => $label): ?>
                             <option value="<?= e($code) ?>"><?= e($code) ?> — <?= e($label) ?></option>
                         <?php endforeach; ?>
                     </optgroup>
@@ -339,17 +339,30 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </template>
                     </div>
 
+                    <!-- Express Checkout Token -->
                     <div x-show="expressQrActive" x-cloak x-transition
                          class="mt-4 p-5 rounded-2xl bg-theme-card border-2 border-theme-accent text-center">
                         <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-extrabold uppercase">
                             IN-LIBRARY EXPRESS CHECKOUT TOKEN
                         </span>
-                        <h5 class="text-base font-extrabold text-theme-text mt-1">
-                            Present Phone + Book (<span class="font-mono text-theme-accent" x-text="expressAccession"></span>) at Help Desk
-                        </h5>
-                        <div class="inline-block p-4 bg-white rounded-2xl border-4 border-theme-accent shadow-lg my-3">
+                        
+                        <div class="flex items-center justify-center gap-4 mt-2">
+                            <h5 class="text-base font-extrabold text-theme-text">
+                                Present Phone + Book (<span class="font-mono text-theme-accent" x-text="expressAccession"></span>)
+                            </h5>
+                            <button type="button" @click="toggleExpressInvert()"
+                                    :class="expressQrInverted ? 'bg-indigo-500 text-white' : 'bg-theme-main text-theme-muted border border-theme-border'"
+                                    class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition shadow-sm">
+                                <span x-text="expressQrInverted ? '◐ Inverted QR' : '◑ Standard QR'"></span>
+                            </button>
+                        </div>
+                        
+                        <!-- Adaptive QR Container -->
+                        <div class="inline-block p-4 rounded-2xl border-4 shadow-lg my-3 transition-colors duration-300"
+                             :class="expressQrInverted ? 'bg-[#0f172a] border-indigo-500' : 'bg-white border-theme-accent'">
                             <div id="expressQrCanvas" class="w-44 h-44 flex items-center justify-center"></div>
                         </div>
+                        
                         <p class="text-xs font-mono font-bold text-theme-accent">Refreshes in <span x-text="expressSecondsLeft"></span>s</p>
                     </div>
                 </div>
@@ -430,6 +443,8 @@ function opacApp() {
         expressAccession: '',
         expressSecondsLeft: 30,
         expressTimer: null,
+        expressQrInverted: false,
+        lastExpressPayload: '',
 
         filters: {
             material_type: 'all',
@@ -596,6 +611,29 @@ function opacApp() {
             }
         },
 
+        toggleExpressInvert() {
+            this.expressQrInverted = !this.expressQrInverted;
+            if (this.lastExpressPayload) {
+                this.renderExpressQr(this.lastExpressPayload);
+            }
+        },
+
+        renderExpressQr(payload) {
+            this.lastExpressPayload = payload;
+            const container = document.getElementById('expressQrCanvas');
+            if (container) {
+                container.innerHTML = '';
+                new QRCode(container, {
+                    text: payload,
+                    width: 176,
+                    height: 176,
+                    colorDark: this.expressQrInverted ? "#ffffff" : "#0f172a",
+                    colorLight: this.expressQrInverted ? "#0f172a" : "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+        },
+
         async generateExpressQr(accessionNo) {
             this.expressAccession = accessionNo;
             this.expressQrActive = true;
@@ -610,18 +648,7 @@ function opacApp() {
                 const data = await res.json();
                 if (data.success) {
                     this.expressSecondsLeft = data.seconds_left;
-                    const container = document.getElementById('expressQrCanvas');
-                    if (container) {
-                        container.innerHTML = '';
-                        new QRCode(container, {
-                            text: data.qr_payload,
-                            width: 176,
-                            height: 176,
-                            colorDark: "#0f172a",
-                            colorLight: "#ffffff",
-                            correctLevel: QRCode.CorrectLevel.M
-                        });
-                    }
+                    this.renderExpressQr(data.qr_payload);
                 }
             };
 
