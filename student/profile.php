@@ -7,7 +7,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<div x-data="profileSecurityApp()" x-init="loadProfile()" @keydown.escape.window="toastMsg = ''; closePinModal();" class="max-w-5xl mx-auto space-y-6">
+<!-- The @keydown.enter.window line here blocks infinite toast loops -->
+<div x-data="profileSecurityApp()" x-init="loadProfile()" 
+     @keydown.escape.window="toastMsg = ''; closePinModal();" 
+     @keydown.enter.window="if(toastMsg){ $event.preventDefault(); toastMsg=''; }"
+     class="max-w-5xl mx-auto space-y-6">
 
     <!-- CENTERED SCREEN RESPONSE MODAL -->
     <div x-show="toastMsg" x-cloak
@@ -71,7 +75,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
     </div>
 
-    <!-- 🔓 SECURITY UNLOCKED BANNER (Appears only when PIN is verified) -->
+    <!-- 🔓 SECURITY UNLOCKED BANNER -->
     <div x-show="profile.has_pin && isUnlocked" x-cloak x-transition
          class="bg-amber-500/10 border border-amber-500/40 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="flex items-center gap-4">
@@ -93,7 +97,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
     <div class="bg-theme-card border border-theme-border border-l-4 border-l-theme-accent rounded-2xl p-5 sm:p-6 shadow-xs">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             
-            <!-- Left: Avatar with Edit Icon -->
             <div class="flex items-center gap-5">
                 <div class="relative group shrink-0">
                     <template x-if="profile.photo_path">
@@ -132,7 +135,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </button>
         </div>
 
-        <!-- Theme-Adaptive Editable Personal Info Bar -->
         <div class="mt-6 pt-5 border-t border-theme-border">
             <form @submit.prevent="savePersonal()" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                 <div>
@@ -176,7 +178,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
     <!-- MAIN 2-COLUMN GRID -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- LEFT 5 COLUMNS: LOCKED LEGAL REGISTRAR IDENTITY (SUPER ADMIN ONLY) -->
         <div class="lg:col-span-5 bg-theme-card border border-theme-border rounded-2xl p-5 sm:p-6 shadow-xs h-fit space-y-4">
             <div class="flex items-center justify-between pb-3 border-b border-theme-border">
                 <div>
@@ -233,7 +234,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </div>
         </div>
 
-        <!-- RIGHT 7 COLUMNS: SECURITY, PASSWORDS & 2FA -->
         <div class="lg:col-span-7 space-y-6">
 
             <!-- CARD 1: CHANGE PASSWORD -->
@@ -254,7 +254,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </div>
 
-                <!-- MODE A: STANDARD PASSWORD CHANGE -->
                 <form x-show="!forgotMode" @submit.prevent="submitRegularPasswordChange()" class="space-y-4 text-xs">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
                         <div class="w-full">
@@ -301,7 +300,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
                 </form>
 
-                <!-- MODE B: FORGOT PASSWORD FLOW -->
                 <div x-show="forgotMode" x-cloak x-transition class="space-y-4 text-xs">
                     <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px]">
                         🔐 <strong>Forgot Password Recovery:</strong> Choose a verification channel below to reset your password without needing your current password.
@@ -390,7 +388,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                           x-text="profile.has_pin ? '✓ PIN Active' : 'Not Set'"></span>
                 </div>
 
-                <!-- Setup PIN Form -->
                 <form x-show="!profile.has_pin" @submit.prevent="enablePin()" class="space-y-3">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -409,12 +406,15 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </form>
 
-                <!-- Remove PIN Form -->
                 <form x-show="profile.has_pin" @submit.prevent="disablePin()" class="space-y-3">
                     <p class="text-xs text-theme-muted mb-3">To disable the PIN requirement, please verify your PIN to confirm.</p>
-                    <button type="submit" 
+                    <button type="button" x-show="!isUnlocked" @click="requirePin(()=>{})"
                             class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs shadow transition shrink-0">
-                        <span x-text="isUnlocked ? 'Remove PIN' : '🔒 Unlock & Remove PIN'"></span>
+                        🔒 Unlock to Remove PIN
+                    </button>
+                    <button type="submit" x-show="isUnlocked" 
+                            class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs shadow transition shrink-0">
+                        Remove PIN
                     </button>
                     <p class="text-[10px] text-theme-muted mt-2 pt-2 border-t border-theme-border/50 inline-block">
                         Forgot your PIN? Please contact the Administration or Library Help Desk to reset your security lock.
@@ -550,7 +550,7 @@ function profileSecurityApp() {
         showToast(msg, ok = true) {
             this.toastMsg = msg;
             this.toastOk = ok;
-            // Unfocus active element to stop Spacebar re-triggers
+            // Unfocus active element to stop Spacebar re-triggers when toast appears
             if (document.activeElement) document.activeElement.blur();
             this.$nextTick(() => {
                 if (this.$refs.toastOkBtn) this.$refs.toastOkBtn.focus();
@@ -630,7 +630,7 @@ function profileSecurityApp() {
                 return;
             }
             if (this.profile.has_pin && !this.isUnlocked) {
-                this.requirePin(() => {}); // Only unlock, do not enter edit mode immediately
+                this.requirePin(() => {}); // Only unlock
                 return;
             }
             this.editingPersonal = true;
@@ -676,6 +676,7 @@ function profileSecurityApp() {
         },
 
         savePersonal() {
+            if (this.toastMsg) return; // Block double submit if warning is active
             this.requirePin(async (pinCode) => {
                 try {
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
@@ -700,6 +701,7 @@ function profileSecurityApp() {
         },
 
         submitRegularPasswordChange() {
+            if (this.toastMsg) return;
             this.requirePin(async (pinCode) => {
                 try {
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
@@ -725,6 +727,7 @@ function profileSecurityApp() {
         },
 
         async enablePin() {
+            if (this.toastMsg) return;
             try {
                 const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
                     method: 'POST',
@@ -747,6 +750,7 @@ function profileSecurityApp() {
         },
 
         disablePin() {
+            if (this.toastMsg) return;
             this.requirePin(async (pinCode) => {
                 try {
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
@@ -796,6 +800,7 @@ function profileSecurityApp() {
         },
 
         async submitForgotPasswordReset() {
+            if (this.toastMsg) return;
             this.requirePin(async (pinCode) => {
                 try {
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
@@ -870,6 +875,7 @@ function profileSecurityApp() {
         },
 
         async confirmGaSetup() {
+            if (this.toastMsg) return;
             this.requirePin(async (pinCode) => {
                 try {
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {

@@ -10,17 +10,54 @@ require_role(['student', 'faculty', 'librarian', 'super_admin']);
 
 $user_id = (int) $_SESSION['user_id'];
 
-// Global helper to verify PIN if the user has one enabled
+// --- DATABASE-BACKED BRUTE FORCE PROTECTION ---
+function check_db_lockout($pdo, $user_id) {
+    $stmt = $pdo->prepare("SELECT security_lockout_until FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $lockout = $stmt->fetchColumn();
+
+    if ($lockout && strtotime($lockout) > time()) {
+        $left = strtotime($lockout) - time();
+        echo json_encode(['success' => false, 'message' => "Too many invalid attempts. Try again in {$left} seconds."]);
+        exit();
+    }
+}
+
+function record_db_failure($pdo, $user_id, $message) {
+    $stmt = $pdo->prepare("SELECT security_attempts FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $attempts = (int) $stmt->fetchColumn() + 1;
+
+    $lockout = null;
+    if ($attempts >= 5) {
+        $lockout = date('Y-m-d H:i:s', time() + 300); // 5 minute hard lockout
+    }
+
+    $pdo->prepare("UPDATE users SET security_attempts = ?, security_lockout_until = ? WHERE id = ?")
+        ->execute([$attempts, $lockout, $user_id]);
+
+    echo json_encode(['success' => false, 'message' => $message]);
+    exit();
+}
+
+function clear_db_failures($pdo, $user_id) {
+    $pdo->prepare("UPDATE users SET security_attempts = 0, security_lockout_until = NULL WHERE id = ?")
+        ->execute([$user_id]);
+}
+
+// Global helper to verify Profile Lock PIN 
 function verify_profile_pin($pdo, $user_id, $provided_pin) {
+    check_db_lockout($pdo, $user_id);
+
     $stmt = $pdo->prepare("SELECT profile_pin FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$user_id]);
     $pin_hash = $stmt->fetchColumn();
 
     if (!empty($pin_hash)) {
         if (empty($provided_pin) || !password_verify($provided_pin, $pin_hash)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid Profile Lock PIN. Security change blocked.']);
-            exit();
+            record_db_failure($pdo, $user_id, 'Invalid Profile Lock PIN. Security change blocked.');
         }
+        clear_db_failures($pdo, $user_id);
     }
 }
 
@@ -69,20 +106,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'upload_photo') {
 
     log_action($pdo, $user_id, 'PROFILE_PHOTO', 'Updated profile picture.');
 
-    echo json_encode([
-        'success'    => true,
-        'photo_url'  => BASE_URL . '/' . $rel_path,
-        'photo_path' => $rel_path,
-        'message'    => 'Profile picture updated successfully!'
-    ]);
+    echo json_encode(['success' => true, 'photo_url' => BASE_URL . '/' . $rel_path, 'photo_path' => $rel_path, 'message' => 'Profile picture updated successfully!']);
     exit();
 }
 
 $input  = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $input['action'] ?? ($_GET['action'] ?? 'get_profile');
 
-// 0. VERIFY PIN ENDPOINT (For unlocking UI smoothly)
+// 0. VERIFY PIN ENDPOINT
 if ($action === 'verify_pin') {
+    check_db_lockout($pdo, $user_id);
+
     $pin = trim($input['pin'] ?? '');
     $stmt = $pdo->prepare("SELECT profile_pin FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$user_id]);
@@ -94,9 +128,10 @@ if ($action === 'verify_pin') {
     }
 
     if (password_verify($pin, $pin_hash)) {
+        clear_db_failures($pdo, $user_id);
         echo json_encode(['success' => true, 'message' => 'Security Unlocked!']);
     } else {
-        echo json_encode(['success' => false, 'message' => 'Invalid Profile Lock PIN.']);
+        record_db_failure($pdo, $user_id, 'Invalid Profile Lock PIN.');
     }
     exit();
 }
@@ -143,19 +178,18 @@ if ($action === 'update_personal') {
         exit();
     }
 
-    $pdo->prepare("UPDATE users SET display_name = ?, contact_no = ? WHERE id = ?")
-        ->execute([$display_name, $contact_no, $user_id]);
-
+    $pdo->prepare("UPDATE users SET display_name = ?, contact_no = ? WHERE id = ?")->execute([$display_name, $contact_no, $user_id]);
     $_SESSION['display_name'] = $display_name;
 
     log_action($pdo, $user_id, 'PROFILE_UPDATE', "Updated Display Name to '{$display_name}' and Contact No. to '{$contact_no}'.");
-
     echo json_encode(['success' => true, 'message' => 'Display Name and Contact Number updated!']);
     exit();
 }
 
 // 3. SET UP / ENABLE PROFILE LOCK PIN
 if ($action === 'setup_pin') {
+    check_db_lockout($pdo, $user_id);
+
     $password = trim($input['password'] ?? '');
     $new_pin  = trim($input['new_pin'] ?? '');
 
@@ -169,9 +203,9 @@ if ($action === 'setup_pin') {
     $hash = $stmt->fetchColumn();
 
     if (!$hash || !password_verify($password, $hash)) {
-        echo json_encode(['success' => false, 'message' => 'Incorrect current password.']);
-        exit();
+        record_db_failure($pdo, $user_id, 'Incorrect current password.');
     }
+    clear_db_failures($pdo, $user_id);
 
     $pin_hash = password_hash($new_pin, PASSWORD_DEFAULT);
     $pdo->prepare("UPDATE users SET profile_pin = ? WHERE id = ?")->execute([$pin_hash, $user_id]);
@@ -218,6 +252,7 @@ if ($action === 'init_ga_setup') {
 // 6. VERIFY & ACTIVATE GOOGLE AUTHENTICATOR
 if ($action === 'verify_ga_setup') {
     verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+    check_db_lockout($pdo, $user_id);
     
     $code = trim($input['code'] ?? '');
 
@@ -231,9 +266,9 @@ if ($action === 'verify_ga_setup') {
     }
 
     if (!verify_ga_totp($secret, $code)) {
-        echo json_encode(['success' => false, 'message' => 'Invalid 6-digit Authenticator code. Ensure your phone time is synced.']);
-        exit();
+        record_db_failure($pdo, $user_id, 'Invalid 6-digit Authenticator code. Ensure your phone time is synced.');
     }
+    clear_db_failures($pdo, $user_id);
 
     $pdo->prepare("UPDATE users SET ga_enabled = 1 WHERE id = ?")->execute([$user_id]);
     log_action($pdo, $user_id, '2FA_GA_ENABLED', 'Enabled Google Authenticator 3rd-party 2FA.');
@@ -245,6 +280,7 @@ if ($action === 'verify_ga_setup') {
 // 7. STANDARD CHANGE PASSWORD
 if ($action === 'change_password') {
     verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+    check_db_lockout($pdo, $user_id);
 
     $current_password = $input['current_password'] ?? '';
     $new_password     = $input['new_password'] ?? '';
@@ -270,9 +306,9 @@ if ($action === 'change_password') {
     $u = $stmt->fetch();
 
     if (!$u || !password_verify($current_password, $u['password_hash'])) {
-        echo json_encode(['success' => false, 'message' => 'Invalid Current Password!']);
-        exit();
+        record_db_failure($pdo, $user_id, 'Invalid Current Password!');
     }
+    clear_db_failures($pdo, $user_id);
 
     $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
     $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?")->execute([$new_hash, $user_id]);
@@ -318,32 +354,22 @@ if ($action === 'send_otp') {
 
     log_action($pdo, $user_id, 'FORGOT_PW_OTP_SENT', "Sent Forgot Password OTP via " . strtoupper($channel) . " API to {$destination}.");
 
-    echo json_encode([
-        'success'     => true,
-        'channel'     => $channel,
-        'destination' => $destination,
-        'demo_otp'    => $otp_code,
-        'message'     => "Verification code sent via " . strtoupper($channel) . " API to {$destination}!"
-    ]);
+    echo json_encode(['success' => true, 'channel' => $channel, 'destination' => $destination, 'demo_otp' => $otp_code, 'message' => "Verification code sent via " . strtoupper($channel) . " API to {$destination}!"]);
     exit();
 }
 
 // 9. RESET FORGOTTEN PASSWORD USING VERIFICATION CODE
 if ($action === 'reset_forgot_password') {
     verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+    check_db_lockout($pdo, $user_id);
 
     $new_password     = $input['new_password'] ?? '';
     $confirm_password = $input['confirm_password'] ?? '';
     $auth_method      = trim($input['auth_method'] ?? 'email'); 
     $otp_input        = trim($input['otp_code'] ?? '');
 
-    if ($new_password === '' || strlen($new_password) < 6) {
-        echo json_encode(['success' => false, 'message' => 'New password must be at least 6 characters long.']);
-        exit();
-    }
-
-    if ($new_password !== $confirm_password) {
-        echo json_encode(['success' => false, 'message' => 'New password and confirmation password do not match.']);
+    if (strlen($new_password) < 6 || $new_password !== $confirm_password) {
+        echo json_encode(['success' => false, 'message' => 'Passwords must match and be at least 6 chars long.']);
         exit();
     }
 
@@ -353,30 +379,27 @@ if ($action === 'reset_forgot_password') {
 
     if ($auth_method === 'ga') {
         if ((int)$u['ga_enabled'] !== 1 || empty($u['ga_secret'])) {
-            echo json_encode(['success' => false, 'message' => 'Google Authenticator is not linked on your account yet.']);
-            exit();
+            record_db_failure($pdo, $user_id, 'Google Authenticator is not linked on your account yet.');
         }
         if (!verify_ga_totp($u['ga_secret'], $otp_input)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid 6-digit Google Authenticator code!']);
-            exit();
+            record_db_failure($pdo, $user_id, 'Invalid 6-digit Google Authenticator code!');
         }
     } elseif (in_array($auth_method, ['email', 'sms'], true)) {
         if (empty($u['otp_code']) || $u['otp_channel'] !== $auth_method) {
-            echo json_encode(['success' => false, 'message' => 'Please click "Send Verification Code" first.']);
-            exit();
+            record_db_failure($pdo, $user_id, 'Please request a verification code first.');
         }
         if (strtotime($u['otp_expires_at']) < time()) {
-            echo json_encode(['success' => false, 'message' => 'Verification code has expired. Please request a new code.']);
-            exit();
+            record_db_failure($pdo, $user_id, 'Verification code has expired. Please request a new code.');
         }
         if (!hash_equals((string)$u['otp_code'], $otp_input)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid 6-digit verification code!']);
-            exit();
+            record_db_failure($pdo, $user_id, 'Invalid 6-digit verification code!');
         }
     } else {
         echo json_encode(['success' => false, 'message' => 'Invalid verification method selected.']);
         exit();
     }
+
+    clear_db_failures($pdo, $user_id);
 
     $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
     $pdo->prepare("UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE id = ?")

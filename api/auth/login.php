@@ -5,6 +5,13 @@ require_once __DIR__ . '/../../config/session.php';
 
 $pdo = $GLOBALS['pdo'];
 
+// Brute-Force Lockout Check
+if (isset($_SESSION['login_lockout']) && time() < $_SESSION['login_lockout']) {
+    $left = $_SESSION['login_lockout'] - time();
+    echo json_encode(['success' => false, 'message' => "Too many failed attempts. Try again in {$left} seconds."]);
+    exit();
+}
+
 $input = json_decode(file_get_contents('php://input'), true);
 $identifier = trim($input['identifier'] ?? '');
 $password   = $input['password'] ?? '';
@@ -19,6 +26,12 @@ $stmt->execute([':id' => $identifier, ':email' => $identifier]);
 $user = $stmt->fetch();
 
 if (!$user || !password_verify($password, $user['password_hash'])) {
+    // Record Failed Attempt
+    $_SESSION['login_attempts'] = ($_SESSION['login_attempts'] ?? 0) + 1;
+    if ($_SESSION['login_attempts'] >= 5) {
+        $_SESSION['login_lockout'] = time() + 300; // 5 minute lockout
+    }
+
     log_action($pdo, $user['id'] ?? null, 'AUTH_FAILED', "Failed login attempt for identifier: {$identifier}");
     echo json_encode(['success' => false, 'message' => 'Invalid School ID/Email or password.']);
     exit();
@@ -28,6 +41,9 @@ if ($user['status'] !== 'active') {
     echo json_encode(['success' => false, 'message' => 'Account status is ' . $user['status'] . '.']);
     exit();
 }
+
+// Success: Clear Lockouts
+unset($_SESSION['login_attempts'], $_SESSION['login_lockout']);
 
 session_regenerate_id(true);
 $_SESSION['user_id']       = (int) $user['id'];
