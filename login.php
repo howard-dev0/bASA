@@ -10,17 +10,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
 }
 
 $pdo = $GLOBALS['pdo'];
-$dev_mode = true;
-try {
-    $stmt_dev = $pdo->query("SELECT setting_value FROM system_settings WHERE setting_key = 'dev_mode_quick_fills' LIMIT 1");
-    if ($stmt_dev) {
-        $val = $stmt_dev->fetchColumn();
-        if ($val !== false) {
-            $dev_mode = ($val === '1');
-        }
-    }
-} catch (\Throwable $e) {}
-
+$dev_mode = is_dev_mode($pdo);
 $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactivity. Please sign in again.' : '';
 ?>
 <!DOCTYPE html>
@@ -84,7 +74,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
             --accent-hover: #0271ab;
         }
 
-        [data-theme="bestlink-light"] {
+        [data-theme="bestlink-light"], [data-theme="light-mode"] {
             --bg-sidebar: #1b1464;
             --bg-main: #f0f7ff;
             --bg-card: #ffffff;
@@ -96,51 +86,35 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
             --accent-hover: #1b1464;
         }
 
-        [data-theme="light-mode"] {
-            --bg-sidebar: #ffffff;
-            --bg-main: #f8fafc;
-            --bg-card: #ffffff;
-            --bg-hover: #f1f5f9;
-            --border-color: #e2e8f0;
-            --text-normal: #0f172a;
-            --text-muted: #64748b;
-            --accent-primary: #2563eb;
-            --accent-hover: #1d4ed8;
+        .bcp-login-bg {
+            background-color: #080b24;
+            background-image:
+                radial-gradient(at 15% 20%, rgba(0, 137, 208, 0.32) 0px, transparent 50%),
+                radial-gradient(at 85% 15%, rgba(217, 35, 42, 0.24) 0px, transparent 45%),
+                radial-gradient(at 50% 85%, rgba(27, 20, 100, 0.85) 0px, transparent 60%),
+                linear-gradient(135deg, #070a20 0%, #130f40 50%, #0c1938 100%);
         }
 
-        [data-theme="discord-dark"] {
-            --bg-sidebar: #2b2d31;
-            --bg-main: #313338;
-            --bg-card: #232428;
-            --bg-hover: #35373c;
-            --border-color: #3f4147;
-            --text-normal: #f2f3f5;
-            --text-muted: #949ba4;
-            --accent-primary: #5865f2;
-            --accent-hover: #4752c4;
-        }
-
-        [data-theme="emerald-scholar"] {
-            --bg-sidebar: #0d1f1a;
-            --bg-main: #132a23;
-            --bg-card: #19382f;
-            --bg-hover: #21473c;
-            --border-color: #2b5c4e;
-            --text-normal: #ecfdf5;
-            --text-muted: #6ee7b7;
-            --accent-primary: #10b981;
-            --accent-hover: #059669;
+        [data-theme="bestlink-light"] .bcp-login-bg,
+        [data-theme="light-mode"] .bcp-login-bg {
+            background-color: #f0f7ff;
+            background-image:
+                radial-gradient(at 15% 20%, rgba(0, 137, 208, 0.18) 0px, transparent 50%),
+                radial-gradient(at 85% 15%, rgba(217, 35, 42, 0.12) 0px, transparent 45%),
+                linear-gradient(135deg, #e0f2fe 0%, #f0f7ff 50%, #eef2ff 100%);
         }
     </style>
 </head>
-<body class="bg-theme-main text-theme-text font-sans min-h-screen flex flex-col justify-center items-center p-4 relative selection:bg-theme-accent selection:text-white transition-colors duration-200"
+<body class="bcp-login-bg text-theme-text font-sans min-h-screen flex flex-col justify-center items-center p-4 relative selection:bg-theme-accent selection:text-white transition-colors duration-200"
       x-data="loginPortalApp('<?= e($timeout_notice) ?>')"
-      @keydown.escape.window="closeAlert(); forgotOpen = false"
+      @keydown.escape.window="if (alertMsg) { closeAlert(); } else { forgotOpen = false; }"
       @keydown.enter.window="if (alertMsg) { $event.preventDefault(); $event.stopPropagation(); closeAlert(); }">
+
+    <?php include __DIR__ . '/includes/firebase_sms.php'; ?>
 
     <!-- TOP BAR: BACK TO HOME & LIGHT/DARK MODE TOGGLE -->
     <div class="fixed top-4 inset-x-4 max-w-5xl mx-auto flex items-center justify-between z-30 pointer-events-none">
-        <a href="<?= BASE_URL ?>/index.php"
+        <a href="<?= BASE_URL ?>/index.php?home=1"
            class="pointer-events-auto px-3.5 py-2 rounded-xl bg-theme-card hover:bg-theme-hover border border-theme-border text-xs font-extrabold text-theme-text shadow-md transition flex items-center gap-1.5">
             <span>←</span>
             <span>Home</span>
@@ -157,9 +131,10 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
 
     <!-- CENTERED SCREEN WARNING / RESPONSE MODAL -->
     <div x-show="alertMsg" x-cloak
+         @click.stop="closeAlert()"
          class="fixed inset-0 z-[150] flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
          x-transition>
-        <div @click.away="closeAlert()"
+        <div @click.stop
              :class="alertOk ? 'border-emerald-500' : 'border-[#D9232A]'"
              class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
             <div :class="alertOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'"
@@ -174,7 +149,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
             </div>
             <button type="button"
                     x-ref="alertOkBtn"
-                    @click="closeAlert()"
+                    @click.stop="closeAlert()"
                     :class="alertOk ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : 'bg-[#D9232A] hover:bg-red-700 text-white'"
                     class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition focus:ring-4 focus:ring-white/30 outline-none">
                 OK, Understood
@@ -183,12 +158,12 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
     </div>
 
     <!-- MAIN LOGIN CARD -->
-    <div class="w-full max-w-md bg-theme-card border border-theme-border rounded-3xl shadow-2xl overflow-hidden mt-10 sm:mt-0">
+    <div class="w-full max-w-md bg-theme-card/95 backdrop-blur-xl border border-theme-border rounded-3xl shadow-2xl overflow-hidden mt-10 sm:mt-0 relative z-10">
         <div class="p-6 sm:p-8 border-b border-theme-border text-center bg-gradient-to-b from-white/5 to-transparent">
-            <a href="<?= BASE_URL ?>/index.php" class="inline-block bg-white px-5 py-2.5 rounded-2xl shadow-md border border-slate-200 mb-4">
+            <a href="<?= BASE_URL ?>/index.php?home=1" class="inline-block bg-white px-5 py-3 rounded-2xl shadow-md border border-slate-200 mb-4">
                 <?php render_basa_logo('md'); ?>
             </a>
-            <h1 class="text-xl font-extrabold text-theme-text">Bestlink Library & Archives</h1>
+            <h1 class="text-xl font-extrabold text-theme-text">Bestlink Library &amp; Archives</h1>
             <p class="text-xs text-theme-muted mt-1">Sign in with your 9-digit Student ID, Staff ID, or BCP Email</p>
         </div>
 
@@ -248,33 +223,40 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
 
     <!-- FORGOT PASSWORD MODAL -->
     <div x-show="forgotOpen" x-cloak
+         @click.self="if (!alertMsg) forgotOpen = false"
          class="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
          x-transition>
-        <div @click.away="forgotOpen = false"
+        <div @click.stop
              class="w-full max-w-lg bg-theme-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden">
             <div class="p-4 sm:p-5 border-b border-theme-border flex items-center justify-between bg-theme-main/50">
                 <div>
                     <h3 class="text-base font-extrabold text-theme-text">Account Password Recovery</h3>
-                    <p class="text-xs text-theme-muted">Verify via Email OTP, SMS OTP, or Google Authenticator</p>
+                    <p class="text-xs text-theme-muted">Verify via MailerSend Email OTP, Firebase SMS OTP, or Google Authenticator</p>
                 </div>
                 <button type="button" @click="forgotOpen = false" class="w-8 h-8 rounded-lg bg-theme-hover text-theme-muted font-bold">&times;</button>
             </div>
 
             <div class="p-5 space-y-4 text-xs">
-                <div class="flex gap-2">
-                    <input type="text" x-model="fp.identifier" placeholder="Enter your School ID or Email..."
+                <form @submit.prevent="findAccount()" class="flex gap-2">
+                    <input type="text" x-model="fp.identifier" required placeholder="Enter your School ID or Email..."
                            class="flex-1 px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono font-bold text-theme-text outline-none">
-                    <button type="button" @click="findAccount()"
+                    <button type="submit"
                             class="px-4 py-2.5 rounded-xl bg-theme-accent text-white font-extrabold shrink-0">
                         Find Account
                     </button>
-                </div>
+                </form>
 
                 <template x-if="fp.account">
                     <div class="space-y-4 pt-2 border-t border-theme-border">
-                        <div class="p-3 rounded-xl bg-theme-main border border-theme-border">
-                            <p class="font-extrabold text-theme-text" x-text="fp.account.full_name"></p>
-                            <p class="text-[11px] text-theme-muted mt-0.5">Select a verification method below:</p>
+                        <div class="p-3 rounded-xl bg-theme-main border border-theme-border flex items-center justify-between">
+                            <div>
+                                <p class="font-extrabold text-theme-text" x-text="fp.account.full_name"></p>
+                                <p class="text-[11px] text-theme-muted mt-0.5">Select a verification method below:</p>
+                            </div>
+                            <button type="button" @click="resetRecoveryState()"
+                                    class="text-[11px] font-bold text-theme-muted hover:text-theme-text underline">
+                                Change ID
+                            </button>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -287,8 +269,8 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                             <button type="button" @click="fp.auth_method = 'sms'"
                                     :class="fp.auth_method === 'sms' ? 'border-theme-accent bg-theme-hover text-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
                                     class="p-2.5 rounded-xl border text-left font-extrabold">
-                                📱 SMS OTP
-                                <p class="text-[10px] font-normal truncate mt-0.5" x-text="fp.account.phone_masked || 'Not Set'"></p>
+                                📱 Firebase SMS
+                                <p class="text-[10px] font-normal truncate mt-0.5" x-text="fp.account.phone_masked || 'Enter Mobile No.'"></p>
                             </button>
                             <button type="button" @click="fp.auth_method = 'ga'"
                                     :class="fp.auth_method === 'ga' ? 'border-theme-accent bg-theme-hover text-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
@@ -298,16 +280,26 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                             </button>
                         </div>
 
+                        <!-- Editable Mobile Number Input when SMS is chosen -->
+                        <div x-show="fp.auth_method === 'sms'" class="p-3 rounded-xl bg-theme-main border border-theme-border space-y-1.5">
+                            <label class="block text-[10px] font-extrabold uppercase text-theme-muted">
+                                Philippine Mobile Number for SMS OTP (09XX... or +639XX...):
+                            </label>
+                            <input type="text" x-model="fp.phone_override" placeholder="e.g. 09171234567"
+                                   class="w-full px-3 py-2 rounded-lg bg-theme-card border border-theme-border font-mono font-bold text-xs text-theme-text outline-none focus:border-theme-accent">
+                        </div>
+
                         <div x-show="fp.auth_method === 'email' || fp.auth_method === 'sms'" class="flex items-center justify-between gap-2 p-3 rounded-xl bg-theme-main border border-theme-border">
-                            <span class="text-[11px] text-theme-muted">Request a 6-digit reset code:</span>
-                            <button type="button" @click="sendRecoveryOtp()"
-                                    class="px-3.5 py-2 rounded-xl bg-theme-accent text-white font-extrabold">
-                                📨 Send Code
+                            <span class="text-[11px] text-theme-muted"
+                                  x-text="fp.auth_method === 'email' ? 'Send 6-digit code via MailerSend:' : 'Send 6-digit SMS via Firebase:'"></span>
+                            <button type="button" @click="sendRecoveryOtp()" :disabled="fp.sendingOtp"
+                                    class="px-3.5 py-2 rounded-xl bg-theme-accent disabled:opacity-50 text-white font-extrabold">
+                                <span x-text="fp.sendingOtp ? '⏳ Sending...' : '📨 Send Code'"></span>
                             </button>
                         </div>
 
                         <div x-show="fp.demo_otp" class="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 font-mono text-[11px]">
-                            🧪 <strong>Sandbox OTP:</strong> <span class="font-extrabold underline" x-text="fp.demo_otp"></span>
+                            🧪 <strong>OTP Code:</strong> <span class="font-extrabold underline select-all" x-text="fp.demo_otp"></span>
                         </div>
 
                         <form @submit.prevent="resetForgottenPassword()" class="space-y-3">
@@ -321,7 +313,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                             </div>
                             <button type="submit"
                                     class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold shadow">
-                                ✓ Verify & Reset Password
+                                ✓ Verify &amp; Reset Password
                             </button>
                         </form>
                     </div>
@@ -345,10 +337,12 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                 identifier: '',
                 account: null,
                 auth_method: 'email',
+                phone_override: '',
                 otp_code: '',
                 new_password: '',
                 confirm_password: '',
-                demo_otp: ''
+                demo_otp: '',
+                sendingOtp: false
             },
 
             toggleDarkLight() {
@@ -407,10 +401,19 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
             },
 
             openForgotModal() {
-                this.fp.identifier = this.identifier;
-                this.fp.account = null;
-                this.fp.demo_otp = '';
+                if (!this.fp.identifier && this.identifier) {
+                    this.fp.identifier = this.identifier;
+                }
                 this.forgotOpen = true;
+            },
+
+            resetRecoveryState() {
+                this.fp.account = null;
+                this.fp.phone_override = '';
+                this.fp.otp_code = '';
+                this.fp.new_password = '';
+                this.fp.confirm_password = '';
+                this.fp.demo_otp = '';
             },
 
             async findAccount() {
@@ -423,32 +426,76 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                 const data = await res.json();
                 if (data.success) {
                     this.fp.account = data.account;
+                    this.fp.phone_override = data.account.contact_no || '';
                 } else {
                     this.showAlert(data.message, false);
                 }
             },
 
             async sendRecoveryOtp() {
-                if (this.alertMsg) return;
-                const res = await fetch('<?= BASE_URL ?>/api/auth/forgot_password.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'send_otp',
-                        identifier: this.fp.identifier,
-                        channel: this.fp.auth_method
-                    })
-                });
-                const data = await res.json();
-                this.showAlert(data.message, data.success);
-                if (data.success && data.demo_otp) {
-                    this.fp.demo_otp = data.demo_otp;
-                    this.fp.otp_code = data.demo_otp;
+                if (this.alertMsg || this.fp.sendingOtp) return;
+                this.fp.sendingOtp = true;
+
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/auth/forgot_password.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'send_otp',
+                            identifier: this.fp.identifier,
+                            channel: this.fp.auth_method,
+                            phone_override: this.fp.phone_override
+                        })
+                    });
+                    const data = await res.json();
+
+                    if (!data.success) {
+                        this.showAlert(data.message, false);
+                        return;
+                    }
+
+                    if (data.demo_otp) {
+                        this.fp.demo_otp = data.demo_otp;
+                        this.fp.otp_code = data.demo_otp;
+                    }
+
+                    if (this.fp.auth_method === 'sms' && data.phone_e164 && typeof window.basaSendFirebaseSms === 'function') {
+                        const fbRes = await window.basaSendFirebaseSms(data.phone_e164);
+                        if (fbRes.success) {
+                            this.fp.otp_code = '';
+                            this.showAlert(`Firebase SMS OTP sent to ${data.phone_e164}! Check your phone messages.`, true);
+                            return;
+                        } else {
+                            // Provide fallback OTP if Firebase project is on free Spark tier
+                            if (data.fallback_otp) {
+                                this.fp.demo_otp = data.fallback_otp;
+                                this.fp.otp_code = data.fallback_otp;
+                            }
+                            this.showAlert(`${fbRes.error} (Fallback OTP activated below so you can continue testing).`, false);
+                            return;
+                        }
+                    }
+
+                    this.showAlert(data.message, true);
+                } finally {
+                    this.fp.sendingOtp = false;
                 }
             },
 
             async resetForgottenPassword() {
                 if (this.alertMsg) return;
+
+                let firebaseIdToken = '';
+                if (this.fp.auth_method === 'sms' && window.basaSmsConfirmation && typeof window.basaVerifyFirebaseSms === 'function') {
+                    const fbVerify = await window.basaVerifyFirebaseSms(this.fp.otp_code);
+                    if (fbVerify.success) {
+                        firebaseIdToken = fbVerify.idToken;
+                    } else if (!this.fp.demo_otp) {
+                        this.showAlert(fbVerify.error || 'Invalid Firebase SMS code.', false);
+                        return;
+                    }
+                }
+
                 const res = await fetch('<?= BASE_URL ?>/api/auth/forgot_password.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -456,7 +503,9 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                         action: 'reset_password',
                         identifier: this.fp.identifier,
                         auth_method: this.fp.auth_method,
+                        phone_override: this.fp.phone_override,
                         otp_code: this.fp.otp_code,
+                        firebase_id_token: firebaseIdToken,
                         new_password: this.fp.new_password,
                         confirm_password: this.fp.confirm_password
                     })
@@ -464,6 +513,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                 const data = await res.json();
                 this.showAlert(data.message, data.success);
                 if (data.success) {
+                    this.resetRecoveryState();
                     this.forgotOpen = false;
                 }
             }

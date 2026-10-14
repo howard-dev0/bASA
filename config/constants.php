@@ -10,10 +10,18 @@ define('SYSTEM_HMAC_KEY', 'bASA_BCP_2026_MASTER_SECRET_KEY_99482716');
 define('SESSION_TIMEOUT', 900); // 15 minutes
 define('TOTP_WINDOW', 30);      // 30-second refreshing Dynamic QR
 
-// MailerSend Email API Configuration
+// MailerSend Email API Configuration (6-Digit Email OTP)
 define('MAILERSEND_API_TOKEN', 'mlsn.62316eb1881ba0b065051be110034b41b90396c0deb2efc386884f10c4c71d24');
 define('MAILERSEND_FROM_EMAIL', 'info@test-ywj2lpn950kg7oqz.mlsender.net');
 define('MAILERSEND_FROM_NAME', 'bASA BCP Library');
+
+// Firebase Phone Auth Configuration (6-Digit SMS OTP)
+define('FIREBASE_API_KEY', 'AIzaSyDqsfv_Be3-xf-4F0J2ZrvFOrW7Z2Zsj7A');
+define('FIREBASE_AUTH_DOMAIN', 'hellop2.firebaseapp.com');
+define('FIREBASE_PROJECT_ID', 'hellop2');
+define('FIREBASE_STORAGE_BUCKET', 'hellop2.firebasestorage.app');
+define('FIREBASE_MESSAGING_SENDER_ID', '382398726270');
+define('FIREBASE_APP_ID', '1:382398726270:web:233c02080299abc93a182f');
 
 // 13 Academic Learning Book Subject Domains
 define('BOOK_SUBJECTS', [
@@ -24,7 +32,7 @@ define('BOOK_SUBJECTS', [
     'PSYCH'  => 'Psychology (SH03-B)',
     'EDUC'   => "Teacher's Education (SH04)",
     'BA'     => 'Business Administration (SH05)',
-    'ACC'     => 'Accounting (SH06-F)',
+    'ACC'    => 'Accounting (SH06-F)',
     'ENTREP' => 'Entrepreneurship (SH06-B)',
     'OA'     => 'Office Administration (SH07-F)',
     'TM'     => 'Tourism Management (SH07-B)',

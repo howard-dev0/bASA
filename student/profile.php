@@ -6,15 +6,16 @@ require_role(['student', 'faculty', 'librarian', 'super_admin']);
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<?php include __DIR__ . '/../includes/firebase_sms.php'; ?>
 
-<!-- The @keydown.enter.window line here blocks infinite toast loops -->
 <div x-data="profileSecurityApp()" x-init="loadProfile()" 
-     @keydown.escape.window="toastMsg = ''; closePinModal();" 
-     @keydown.enter.window="if(toastMsg){ $event.preventDefault(); toastMsg=''; }"
+     @keydown.escape.window="if (toastMsg) { toastMsg = ''; } else { closePinModal(); }" 
+     @keydown.enter.window="if (toastMsg) { $event.preventDefault(); $event.stopPropagation(); toastMsg = ''; }"
      class="max-w-5xl mx-auto space-y-6">
 
     <!-- CENTERED SCREEN RESPONSE MODAL -->
     <div x-show="toastMsg" x-cloak
+         @click.stop="toastMsg = ''"
          class="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0 scale-95"
@@ -22,7 +23,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
          x-transition:leave="transition ease-in duration-150"
          x-transition:leave-start="opacity-100 scale-100"
          x-transition:leave-end="opacity-0 scale-95">
-        <div @click.away="toastMsg = ''"
+        <div @click.stop
              :class="toastOk ? 'border-emerald-500' : 'border-[#D9232A]'"
              class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
             
@@ -38,7 +39,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="toastMsg"></p>
             </div>
 
-            <button type="button" @click="toastMsg = ''" x-ref="toastOkBtn"
+            <button type="button" @click.stop="toastMsg = ''" x-ref="toastOkBtn"
                     :class="toastOk ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : 'bg-[#D9232A] hover:bg-red-700 text-white'"
                     class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition focus:ring-4 focus:ring-opacity-50"
                     :class="toastOk ? 'focus:ring-emerald-500' : 'focus:ring-[#D9232A]'">
@@ -49,9 +50,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- PROFILE LOCK PIN REQUIRED MODAL -->
     <div x-show="pinModalOpen" x-cloak
+         @click.self="if (!toastMsg) closePinModal()"
          class="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
          x-transition>
-        <div @click.away="closePinModal()"
+        <div @click.stop
              class="w-full max-w-sm bg-theme-card border-2 border-amber-500 rounded-2xl shadow-2xl p-6 text-center space-y-4">
             <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-500 border border-amber-500/40 mx-auto flex items-center justify-center text-2xl font-extrabold shadow-inner">
                 🔒
@@ -248,7 +250,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
 
                     <button type="button" x-show="!profile.has_pin || isUnlocked || forgotMode" x-transition
-                            @click="forgotMode = !forgotMode; demoOtpCode = ''"
+                            @click="forgotMode = !forgotMode"
                             class="text-xs font-extrabold text-theme-accent hover:underline shrink-0">
                         <span x-text="forgotMode ? '← I Remember My Current Password' : 'Forgot Current Password?'"></span>
                     </button>
@@ -280,13 +282,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
 
                     <div class="flex flex-col sm:flex-row items-center sm:justify-between gap-3 pt-3">
-                        <!-- Left Aligned Link -->
                         <button type="button" @click="toggleForgotMode()"
                                 class="text-xs font-bold text-amber-400 hover:underline text-center sm:text-left">
                             <span x-text="(profile.has_pin && !isUnlocked) ? '🔒 Forgot password? (Unlock Required)' : 'Forgot password? Send verification code instead →'"></span>
                         </button>
                         
-                        <!-- Right Aligned Actions -->
                         <div class="flex gap-2 w-full sm:w-auto">
                             <button type="button" x-show="profile.has_pin && !isUnlocked" @click="requirePin(()=>{})"
                                     class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg transition shrink-0">
@@ -302,22 +302,22 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div x-show="forgotMode" x-cloak x-transition class="space-y-4 text-xs">
                     <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px]">
-                        🔐 <strong>Forgot Password Recovery:</strong> Choose a verification channel below to reset your password without needing your current password.
+                        🔐 <strong>Forgot Password Recovery:</strong> Choose MailerSend Email OTP, Firebase SMS OTP, or Google Authenticator below.
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <button type="button" @click="forgotForm.auth_method = 'email'"
                                 :class="forgotForm.auth_method === 'email' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
                                 class="p-3 rounded-xl border font-extrabold text-left transition">
-                            <p>📧 Email OTP API</p>
+                            <p>📧 MailerSend Email</p>
                             <p class="text-[10px] opacity-75 font-normal mt-0.5 truncate" x-text="profile.email"></p>
                         </button>
 
                         <button type="button" @click="forgotForm.auth_method = 'sms'"
                                 :class="forgotForm.auth_method === 'sms' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
                                 class="p-3 rounded-xl border font-extrabold text-left transition">
-                            <p>📱 SMS OTP API</p>
-                            <p class="text-[10px] opacity-75 font-normal mt-0.5 font-mono" x-text="profile.contact_no || 'No Contact No.'"></p>
+                            <p>📱 Firebase SMS OTP</p>
+                            <p class="text-[10px] opacity-75 font-normal mt-0.5 font-mono" x-text="profile.contact_no || 'Enter Mobile No.'"></p>
                         </button>
 
                         <button type="button" @click="forgotForm.auth_method = 'ga'"
@@ -328,22 +328,31 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </button>
                     </div>
 
+                    <!-- Editable Mobile Number Input when SMS is chosen -->
+                    <div x-show="forgotForm.auth_method === 'sms'" class="p-3.5 rounded-xl bg-theme-main border border-theme-border space-y-1.5">
+                        <label class="block text-[10px] font-extrabold uppercase text-theme-muted">
+                            Philippine Mobile Number for SMS OTP (09XX... or +639XX...):
+                        </label>
+                        <input type="text" x-model="forgotForm.phone_override" placeholder="e.g. 09171234567"
+                               class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border font-mono font-bold text-xs text-theme-text outline-none focus:border-theme-accent">
+                    </div>
+
                     <div x-show="forgotForm.auth_method === 'email' || forgotForm.auth_method === 'sms'"
                          class="p-3.5 rounded-xl bg-theme-main border border-theme-border space-y-2">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
                                 <p class="font-extrabold text-theme-text"
-                                   x-text="forgotForm.auth_method === 'email' ? 'Send Code to ' + profile.email : 'Send SMS to ' + (profile.contact_no || 'No number set')"></p>
+                                   x-text="forgotForm.auth_method === 'email' ? 'Send MailerSend OTP to ' + profile.email : 'Send Firebase SMS to ' + (forgotForm.phone_override || profile.contact_no || 'Mobile No.')"></p>
                                 <p class="text-[11px] text-theme-muted">Click to receive a 6-digit password reset code.</p>
                             </div>
-                            <button type="button" @click="sendOtpCode()"
-                                    class="px-4 py-2 rounded-xl bg-theme-accent text-white font-extrabold shrink-0 shadow">
-                                📨 Send Verification Code
+                            <button type="button" @click="sendOtpCode()" :disabled="sendingOtp"
+                                    class="px-4 py-2 rounded-xl bg-theme-accent disabled:opacity-50 text-white font-extrabold shrink-0 shadow">
+                                <span x-text="sendingOtp ? '⏳ Sending...' : '📨 Send Verification Code'"></span>
                             </button>
                         </div>
 
                         <div x-show="demoOtpCode" x-cloak class="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-400 font-mono">
-                            🧪 <strong>Local XAMPP Sandbox OTP:</strong> <span class="text-sm font-extrabold underline select-all" x-text="demoOtpCode"></span>
+                            🧪 <strong>OTP Code:</strong> <span class="text-sm font-extrabold underline select-all" x-text="demoOtpCode"></span>
                         </div>
                     </div>
 
@@ -369,7 +378,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div class="flex justify-end pt-2">
                             <button type="submit"
                                     class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg transition shrink-0">
-                                🔓 Verify Code & Reset Password
+                                🔓 Verify Code &amp; Reset Password
                             </button>
                         </div>
                     </form>
@@ -491,6 +500,7 @@ function profileSecurityApp() {
         forgotMode: false,
         toastMsg: '',
         toastOk: true,
+        sendingOtp: false,
         
         isUnlocked: false,
         sessionPin: '',
@@ -533,6 +543,7 @@ function profileSecurityApp() {
 
         forgotForm: {
             auth_method: 'email',
+            phone_override: '',
             otp_code: '',
             new_password: '',
             confirm_password: ''
@@ -550,7 +561,6 @@ function profileSecurityApp() {
         showToast(msg, ok = true) {
             this.toastMsg = msg;
             this.toastOk = ok;
-            // Unfocus active element to stop Spacebar re-triggers when toast appears
             if (document.activeElement) document.activeElement.blur();
             this.$nextTick(() => {
                 if (this.$refs.toastOkBtn) this.$refs.toastOkBtn.focus();
@@ -563,6 +573,7 @@ function profileSecurityApp() {
                 const data = await res.json();
                 if (data.success && data.profile) {
                     this.profile = data.profile;
+                    this.forgotForm.phone_override = data.profile.contact_no || '';
                     this.isUnlocked = !this.profile.has_pin;
                 }
             } catch (e) {
@@ -586,7 +597,7 @@ function profileSecurityApp() {
                     return true;
                 } else {
                     this.showToast(data.message, false);
-                    this.pinInput = ''; // Auto clear incorrect PIN
+                    this.pinInput = '';
                     return false;
                 }
             } catch (e) {
@@ -630,7 +641,7 @@ function profileSecurityApp() {
                 return;
             }
             if (this.profile.has_pin && !this.isUnlocked) {
-                this.requirePin(() => {}); // Only unlock
+                this.requirePin(() => {});
                 return;
             }
             this.editingPersonal = true;
@@ -640,7 +651,6 @@ function profileSecurityApp() {
         toggleForgotMode() {
             if (this.forgotMode) {
                 this.forgotMode = false;
-                this.demoOtpCode = '';
                 return;
             }
             this.requirePin(() => {
@@ -676,7 +686,7 @@ function profileSecurityApp() {
         },
 
         savePersonal() {
-            if (this.toastMsg) return; // Block double submit if warning is active
+            if (this.toastMsg) return;
             this.requirePin(async (pinCode) => {
                 try {
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
@@ -693,6 +703,7 @@ function profileSecurityApp() {
                     this.showToast(data.message, data.success);
                     if (data.success) {
                         this.editingPersonal = false;
+                        this.forgotForm.phone_override = this.profile.contact_no || '';
                     }
                 } catch (e) {
                     this.showToast('Server error while saving personal info.', false);
@@ -776,7 +787,9 @@ function profileSecurityApp() {
         },
 
         async sendOtpCode() {
+            if (this.sendingOtp) return;
             this.requirePin(async (pinCode) => {
+                this.sendingOtp = true;
                 try {
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
                         method: 'POST',
@@ -784,17 +797,46 @@ function profileSecurityApp() {
                         body: JSON.stringify({ 
                             action: 'send_otp', 
                             channel: this.forgotForm.auth_method,
+                            phone_override: this.forgotForm.phone_override,
                             profile_pin: pinCode
                         })
                     });
                     const data = await res.json();
-                    this.showToast(data.message, data.success);
-                    if (data.success && data.demo_otp) {
+                    if (!data.success) {
+                        this.showToast(data.message, false);
+                        return;
+                    }
+
+                    if (data.contact_no) {
+                        this.profile.contact_no = data.contact_no;
+                    }
+
+                    if (data.demo_otp) {
                         this.demoOtpCode = data.demo_otp;
                         this.forgotForm.otp_code = data.demo_otp;
                     }
+
+                    if (this.forgotForm.auth_method === 'sms' && data.phone_e164 && typeof window.basaSendFirebaseSms === 'function') {
+                        const fbRes = await window.basaSendFirebaseSms(data.phone_e164);
+                        if (fbRes.success) {
+                            this.forgotForm.otp_code = '';
+                            this.showToast(`Firebase SMS OTP sent to ${data.phone_e164}! Check your phone messages.`, true);
+                            return;
+                        } else {
+                            if (data.fallback_otp) {
+                                this.demoOtpCode = data.fallback_otp;
+                                this.forgotForm.otp_code = data.fallback_otp;
+                            }
+                            this.showToast(`${fbRes.error} (Fallback OTP activated below so you can continue testing).`, false);
+                            return;
+                        }
+                    }
+
+                    this.showToast(data.message, true);
                 } catch (e) {
                     this.showToast('Error sending verification code.', false);
+                } finally {
+                    this.sendingOtp = false;
                 }
             });
         },
@@ -803,12 +845,24 @@ function profileSecurityApp() {
             if (this.toastMsg) return;
             this.requirePin(async (pinCode) => {
                 try {
+                    let firebaseIdToken = '';
+                    if (this.forgotForm.auth_method === 'sms' && window.basaSmsConfirmation && typeof window.basaVerifyFirebaseSms === 'function') {
+                        const fbVerify = await window.basaVerifyFirebaseSms(this.forgotForm.otp_code);
+                        if (fbVerify.success) {
+                            firebaseIdToken = fbVerify.idToken;
+                        } else if (!this.demoOtpCode) {
+                            this.showToast(fbVerify.error || 'Invalid Firebase SMS code.', false);
+                            return;
+                        }
+                    }
+
                     const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             action: 'reset_forgot_password',
                             ...this.forgotForm,
+                            firebase_id_token: firebaseIdToken,
                             profile_pin: pinCode
                         })
                     });

@@ -147,6 +147,58 @@ function verify_ga_totp(string $base32_secret, string $code, int $discrepancy = 
 }
 
 // =========================================================================
+// FIREBASE PHONE AUTH (E.164 FORMATTER & SERVER-SIDE ID TOKEN VERIFIER)
+// =========================================================================
+function format_ph_phone_e164(string $phone): string {
+    $digits = preg_replace('/[^0-9]/', '', $phone);
+    if (str_starts_with($digits, '09') && strlen($digits) === 11) {
+        return '+63' . substr($digits, 1);
+    }
+    if (str_starts_with($digits, '9') && strlen($digits) === 10) {
+        return '+63' . $digits;
+    }
+    if (str_starts_with($digits, '639') && strlen($digits) === 12) {
+        return '+' . $digits;
+    }
+    return '+' . $digits;
+}
+
+function verify_firebase_phone_token(string $id_token, string $expected_phone): bool {
+    if ($id_token === '' || !function_exists('curl_init')) {
+        return false;
+    }
+
+    $url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' . rawurlencode(FIREBASE_API_KEY);
+    $ch  = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode(['idToken' => $id_token]),
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0
+    ]);
+
+    $response  = curl_exec($ch);
+    $http_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http_code !== 200 || !$response) {
+        return false;
+    }
+
+    $data = json_decode($response, true);
+    $firebase_phone = $data['users'][0]['phoneNumber'] ?? '';
+    if ($firebase_phone === '') {
+        return false;
+    }
+
+    $expected_e164 = format_ph_phone_e164($expected_phone);
+    return hash_equals($expected_e164, $firebase_phone);
+}
+
+// =========================================================================
 // MAILERSEND REST API EMAIL DISPATCHER
 // =========================================================================
 function send_mailersend_email(string $to_email, string $to_name, string $subject, string $text_body, string $html_body = ''): array {
@@ -181,7 +233,6 @@ function send_mailersend_email(string $to_email, string $to_name, string $subjec
         ],
         CURLOPT_POSTFIELDS     => json_encode($payload),
         CURLOPT_TIMEOUT        => 12,
-        // Avoid local XAMPP SSL CA bundle issues on Windows
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0
     ]);
@@ -191,7 +242,6 @@ function send_mailersend_email(string $to_email, string $to_name, string $subjec
     $curl_err  = curl_error($ch);
     curl_close($ch);
 
-    // MailerSend returns 202 Accepted when queued for delivery
     if ($http_code >= 200 && $http_code < 300) {
         return ['success' => true, 'http_code' => $http_code, 'error' => null];
     }

@@ -75,25 +75,38 @@ if ($action === 'find_account') {
             'full_name'    => $user['full_name'],
             'email_masked' => mask_email($user['email']),
             'phone_masked' => !empty($user['contact_no']) ? mask_phone($user['contact_no']) : null,
+            'contact_no'   => $user['contact_no'] ?? '',
             'ga_enabled'   => (int) $user['ga_enabled'] === 1
         ]
     ]);
     exit();
 }
 
-// 2. SEND OTP FOR FORGOTTEN PASSWORD (VIA MAILERSEND API OR SMS)
+// 2. SEND OTP FOR FORGOTTEN PASSWORD (MAILERSEND EMAIL OR FIREBASE SMS)
 if ($action === 'send_otp') {
     check_user_db_lockout($user);
 
-    $channel = trim($input['channel'] ?? 'email');
+    $channel        = trim($input['channel'] ?? 'email');
+    $phone_override = trim($input['phone_override'] ?? '');
+
     if (!in_array($channel, ['email', 'sms'], true)) {
         echo json_encode(['success' => false, 'message' => 'Invalid verification channel.']);
         exit();
     }
 
-    if ($channel === 'sms' && empty($user['contact_no'])) {
-        echo json_encode(['success' => false, 'message' => 'No contact number is registered on this account. Please use Email OTP or Authenticator.']);
-        exit();
+    $target_phone = !empty($phone_override) ? $phone_override : (string)($user['contact_no'] ?? '');
+
+    if ($channel === 'sms') {
+        $clean_digits = preg_replace('/[^0-9]/', '', $target_phone);
+        if (strlen($clean_digits) < 10) {
+            echo json_encode(['success' => false, 'message' => 'Please enter a valid 11-digit Philippine mobile number (e.g. 09171234567).']);
+            exit();
+        }
+        // Save the mobile number to the account if it was previously empty or updated
+        if ($target_phone !== (string)$user['contact_no']) {
+            $pdo->prepare("UPDATE users SET contact_no = ? WHERE id = ?")->execute([$target_phone, $user['id']]);
+            $user['contact_no'] = $target_phone;
+        }
     }
 
     $otp_code   = (string) random_int(100000, 999999);
@@ -104,6 +117,7 @@ if ($action === 'send_otp') {
 
     $dev_mode = is_dev_mode($pdo);
     $api_status_note = '';
+    $phone_e164 = null;
 
     if ($channel === 'email') {
         $mail_res = send_basa_otp_email($user['email'], $user['full_name'], $user['school_id'], $otp_code);
@@ -111,22 +125,25 @@ if ($action === 'send_otp') {
             $api_status_note = ' (Delivered via MailerSend API)';
         } else {
             if (!$dev_mode) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'MailerSend API Notice: ' . $mail_res['error']
-                ]);
+                echo json_encode(['success' => false, 'message' => 'MailerSend API Notice: ' . $mail_res['error']]);
                 exit();
             }
             $api_status_note = ' (MailerSend Trial Note: ' . $mail_res['error'] . ')';
         }
+    } else {
+        $phone_e164 = format_ph_phone_e164($target_phone);
+        $api_status_note = " (Dispatching via Firebase SMS to {$phone_e164})";
     }
 
     log_action($pdo, (int)$user['id'], 'LOGIN_FORGOT_OTP', "Dispatched password recovery OTP via " . strtoupper($channel) . " for #{$user['school_id']}{$api_status_note}.");
 
     echo json_encode([
-        'success'  => true,
-        'demo_otp' => $dev_mode ? $otp_code : null,
-        'message'  => "6-digit verification code sent via " . strtoupper($channel) . "!" . $api_status_note
+        'success'      => true,
+        'channel'      => $channel,
+        'phone_e164'   => $phone_e164,
+        'demo_otp'     => $dev_mode ? $otp_code : null,
+        'fallback_otp' => $otp_code,
+        'message'      => "6-digit verification code initiated via " . strtoupper($channel) . "!" . $api_status_note
     ]);
     exit();
 }
@@ -135,10 +152,12 @@ if ($action === 'send_otp') {
 if ($action === 'reset_password') {
     check_user_db_lockout($user);
 
-    $auth_method      = trim($input['auth_method'] ?? 'email');
-    $otp_input        = trim($input['otp_code'] ?? '');
-    $new_password     = $input['new_password'] ?? '';
-    $confirm_password = $input['confirm_password'] ?? '';
+    $auth_method       = trim($input['auth_method'] ?? 'email');
+    $otp_input         = trim($input['otp_code'] ?? '');
+    $firebase_id_token = trim($input['firebase_id_token'] ?? '');
+    $phone_override    = trim($input['phone_override'] ?? '');
+    $new_password      = $input['new_password'] ?? '';
+    $confirm_password  = $input['confirm_password'] ?? '';
 
     if (strlen($new_password) < 6) {
         echo json_encode(['success' => false, 'message' => 'New password must be at least 6 characters long.']);
@@ -149,12 +168,18 @@ if ($action === 'reset_password') {
         exit();
     }
 
+    $expected_phone = !empty($phone_override) ? $phone_override : (string)($user['contact_no'] ?? '');
+
     if ($auth_method === 'ga') {
         if ((int)$user['ga_enabled'] !== 1 || empty($user['ga_secret'])) {
             record_user_db_failure($pdo, $user, 'Google Authenticator is not set up on this account. Please use Email or SMS verification.');
         }
         if (!verify_ga_totp($user['ga_secret'], $otp_input)) {
             record_user_db_failure($pdo, $user, 'Invalid 6-digit Google Authenticator code!');
+        }
+    } elseif ($auth_method === 'sms' && $firebase_id_token !== '') {
+        if (!verify_firebase_phone_token($firebase_id_token, $expected_phone)) {
+            record_user_db_failure($pdo, $user, 'Firebase SMS token verification failed or phone number mismatch.');
         }
     } else {
         if (empty($user['otp_code']) || $user['otp_channel'] !== $auth_method) {
