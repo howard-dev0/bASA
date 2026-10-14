@@ -6,6 +6,21 @@ function e(?string $string): string {
     return htmlspecialchars($string ?? '', ENT_QUOTES, 'UTF-8');
 }
 
+function is_dev_mode(?object $pdo = null): bool {
+    $pdo = $pdo ?? ($GLOBALS['pdo'] ?? null);
+    if (!$pdo) return false;
+    try {
+        $stmt = $pdo->query("SELECT setting_value FROM system_settings WHERE setting_key = 'dev_mode_quick_fills' LIMIT 1");
+        if ($stmt) {
+            $val = $stmt->fetchColumn();
+            if ($val !== false) {
+                return ($val === '1');
+            }
+        }
+    } catch (\Throwable $e) {}
+    return false;
+}
+
 function is_valid_student_id(string $school_id): bool {
     return (bool) preg_match('/^\d{9}$/', trim($school_id));
 }

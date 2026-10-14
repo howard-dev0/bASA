@@ -182,6 +182,10 @@ if ($action === 'scan_decode') {
     }
 
     if (str_starts_with($raw_code, 'SIM-USR|')) {
+        if (!is_dev_mode($pdo)) {
+            echo json_encode(['success' => false, 'message' => 'Scan Simulator is disabled because Global Dev Mode is turned off in Super Admin.']);
+            exit();
+        }
         $sim_id = trim(substr($raw_code, 8));
         $stmt_u = $pdo->prepare("SELECT school_id, totp_secret FROM users WHERE school_id = ? LIMIT 1");
         $stmt_u->execute([$sim_id]);

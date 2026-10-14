@@ -5,13 +5,17 @@ require_once __DIR__ . '/../includes/header.php';
 require_role(['librarian', 'super_admin']);
 
 $pdo = $GLOBALS['pdo'];
+$dev_mode = is_dev_mode($pdo);
 
-$sample_accessions = $pdo->query("
-    SELECT ia.accession_no, ia.status, ci.title 
-    FROM item_accessions ia 
-    JOIN catalog_items ci ON ia.catalog_id = ci.id 
-    ORDER BY ia.id ASC LIMIT 6
-")->fetchAll();
+$sample_accessions = [];
+if ($dev_mode) {
+    $sample_accessions = $pdo->query("
+        SELECT ia.accession_no, ia.status, ci.title 
+        FROM item_accessions ia 
+        JOIN catalog_items ci ON ia.catalog_id = ci.id 
+        ORDER BY ia.id ASC LIMIT 6
+    ")->fetchAll();
+}
 
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
@@ -102,7 +106,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                     <div x-show="!cameraActive" class="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center space-y-2 bg-slate-950">
                         <p class="text-xs font-bold text-slate-300">Webcam Scanner is in Standby</p>
-                        <p class="text-[11px] text-slate-400">Click <strong>Start Webcam Scanner</strong> above to scan via camera, or use the manual/simulator input below.</p>
+                        <p class="text-[11px] text-slate-400">Click <strong>Start Webcam Scanner</strong> above to scan via camera, or use the manual input below.</p>
                     </div>
                 </div>
 
@@ -164,6 +168,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </form>
 
+                <?php if ($dev_mode): ?>
                 <div class="mt-4 pt-4 border-t border-theme-border space-y-2.5">
                     <p class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">
                         ⚡ Capstone Defense Single-PC Scan Simulator
@@ -187,6 +192,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <?php endforeach; ?>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -669,7 +675,7 @@ function circulationDeskApp() {
 
             } catch (err) {
                 this.cameraActive = false;
-                this.showToast("Camera permission denied, blocked by browser, or no webcam detected. Use the simulator buttons below.", false);
+                this.showToast("Camera permission denied, blocked by browser, or no webcam detected.", false);
             }
         },
 

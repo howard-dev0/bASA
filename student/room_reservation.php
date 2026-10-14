@@ -3,255 +3,321 @@
 $page_title = 'Discussion Rooms A–G Reservation';
 require_once __DIR__ . '/../includes/header.php';
 require_role(['student', 'faculty']);
+
+$pdo =$GLOBALS['pdo'];
+$dev_mode = is_callable('is_dev_mode') ? is_dev_mode($pdo) : true;
+
+// Fetch sample student IDs for the Defense Simulator when Global Dev Mode is ON
+$sample_companions = [];
+if ($dev_mode) {
+    $stmt_comp =$pdo->prepare("
+        SELECT school_id, full_name, program_code
+        FROM users
+        WHERE role IN ('student', 'faculty') AND status = 'active' AND id != ?
+        ORDER BY id ASC
+        LIMIT 7
+    ");
+    $stmt_comp->execute([(int)$_SESSION['user_id']]);
+    $sample_companions =$stmt_comp->fetchAll();
+}
+
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<div x-data="roomBookingApp()" x-init="initData()" class="space-y-6">
+<div x-data="roomReservationApp()" x-init="initPage()"
+     @keydown.escape.window="feedbackMsg = ''"
+     @keydown.enter.window="if (feedbackMsg) { $event.preventDefault();$event.stopPropagation(); feedbackMsg = ''; }"
+     class="space-y-6">
 
-    <!-- Top Policy & Guidelines Banner -->
-    <div class="bg-theme-card border border-theme-border border-l-4 border-l-theme-accent rounded-2xl p-4 sm:p-6 shadow-xs">
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
-                <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-theme-accent/15 text-theme-accent">
-                    4th Floor East Wing • 7 Discussion Rooms (Rooms A–G)
-                </span>
-                <h1 class="text-xl sm:text-2xl font-extrabold text-theme-text mt-2">
-                    Group Research & Discussion Room Reservation
-                </h1>
-                <p class="text-xs text-theme-muted mt-1">
-                    Automated self-service scheduling replacing manual phone calls and Google Sheets.
-                </p>
+    <!-- CENTERED SCREEN RESPONSE MODAL -->
+    <div x-show="feedbackMsg" x-cloak
+         class="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+         x-transition>
+        <div @click.away="feedbackMsg = ''"
+             :class="feedbackSuccess ? 'border-emerald-500' : 'border-[#D9232A]'"
+             class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+            <div :class="feedbackSuccess ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'"
+                 class="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center text-2xl font-extrabold shadow-inner">
+                <span x-text="feedbackSuccess ? '✓' : '⚠️'"></span>
             </div>
-
-            <button @click="showRulesModal = true"
-                class="px-4 py-2.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-extrabold hover:bg-amber-500 hover:text-slate-950 transition shrink-0">
-                📜 Read Official 4-Step Room Rules
+            <div>
+                <h3 class="text-base font-extrabold"
+                    :class="feedbackSuccess ? 'text-emerald-400' : 'text-red-400'"
+                    x-text="feedbackSuccess ? 'Reservation Updated' : 'Policy / Booking Notice'"></h3>
+                <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="feedbackMsg"></p>
+            </div>
+            <button type="button" x-ref="feedbackOkBtn" @click="feedbackMsg = ''"
+                    :class="feedbackSuccess ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : 'bg-[#D9232A] hover:bg-red-700 text-white'"
+                    class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition outline-none">
+                OK, Understood
             </button>
         </div>
+    </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-5 pt-4 border-t border-theme-border text-xs">
-            <div class="p-3 rounded-xl bg-theme-main border border-theme-border">
-                <p class="font-extrabold text-theme-accent">Step 1 • Booking Window</p>
-                <p class="text-theme-muted mt-0.5">Book for Today or up to <strong>1 day before</strong> intended use.</p>
-            </div>
-            <div class="p-3 rounded-xl bg-theme-main border border-theme-border">
-                <p class="font-extrabold text-emerald-400">Step 2 • 6 to 8 Persons</p>
-                <p class="text-theme-muted mt-0.5">Group Rep + <strong>5 to 7 members</strong> (Min 6, Max 8 capacity).</p>
-            </div>
-            <div class="p-3 rounded-xl bg-theme-main border border-theme-border">
-                <p class="font-extrabold text-amber-400">Step 3 • 1 Room / Day</p>
-                <p class="text-theme-muted mt-0.5">The group representative may book <strong>1 room per day</strong>.</p>
-            </div>
-            <div class="p-3 rounded-xl bg-theme-main border border-theme-border">
-                <p class="font-extrabold text-rose-400">Step 4 • Physical Presence</p>
-                <p class="text-theme-muted mt-0.5">Min. <strong>6 members physically present</strong> at Help Desk to enter.</p>
-            </div>
+    <!-- Top Header & Interactive Map Toggle -->
+    <div class="bg-theme-card border border-theme-border border-l-4 border-l-emerald-500 rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs">
+        <div>
+            <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-emerald-500/15 text-emerald-400">
+                4th Floor East Wing • Discussion Rooms A to G
+            </span>
+            <h1 class="text-xl sm:text-2xl font-extrabold text-theme-text mt-2">
+                Discussion Room Group Reservation
+            </h1>
+            <p class="text-xs text-theme-muted mt-0.5">
+                Reserve a collaborative study room for <strong>6 to 8 persons</strong> and tag your groupmates using their 9-digit BCP Student IDs.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button type="button" @click="showFloorMap = !showFloorMap"
+                    :class="showFloorMap ? 'bg-amber-500 text-slate-950' : 'bg-theme-main text-theme-text border border-theme-border'"
+                    class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition flex items-center gap-2 shadow-xs">
+                <span>🗺️</span>
+                <span x-text="showFloorMap ? 'Hide 4F Floor Map' : 'View Rooms A–G on 4F Map'"></span>
+            </button>
         </div>
     </div>
 
-    <!-- Live Status Strip of Discussion Rooms A to G -->
-    <div class="bg-theme-card border border-theme-border rounded-2xl p-4 sm:p-5 shadow-xs">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-extrabold text-theme-text">Click a Discussion Room to Select (Rooms A–G)</h2>
-            <span class="text-xs text-theme-muted font-mono">Capacity: 6–8 Researchers</span>
+    <!-- 4-Step Institutional Policy Strip -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div class="bg-theme-card border border-theme-border rounded-2xl p-4 shadow-xs">
+            <span class="px-2 py-0.5 rounded bg-theme-accent/15 text-theme-accent font-mono text-[10px] font-extrabold uppercase">Rule 01 • Capacity</span>
+            <p class="text-sm font-extrabold text-theme-text mt-1.5">6 to 8 Persons Required</p>
+            <p class="text-[11px] text-theme-muted mt-0.5">1 Representative (You) + 5 to 7 tagged 9-digit Student IDs.</p>
         </div>
-
-        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-            <template x-for="rm in rooms" :key="rm.id">
-                <button type="button"
-                    @click="form.space_id = rm.id"
-                    :disabled="rm.current_status === 'maintenance'"
-                    :class="[
-                            form.space_id == rm.id ? 'ring-2 ring-theme-accent bg-theme-accent/15 border-theme-accent' : 'bg-theme-main border-theme-border hover:bg-theme-hover',
-                            rm.current_status === 'maintenance' ? 'opacity-40 cursor-not-allowed' : ''
-                        ]"
-                    class="p-3 rounded-xl border text-left transition flex flex-col justify-between">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-extrabold text-theme-text" x-text="rm.space_code"></span>
-                        <span class="w-2.5 h-2.5 rounded-full"
-                            :class="{
-                                  'bg-emerald-500': rm.current_status === 'available',
-                                  'bg-amber-400': rm.current_status === 'reserved',
-                                  'bg-red-500': rm.current_status === 'occupied',
-                                  'bg-slate-500': rm.current_status === 'maintenance'
-                              }"></span>
-                    </div>
-                    <p class="text-[11px] font-bold text-theme-muted mt-1" x-text="rm.space_name"></p>
-                    <span class="mt-2 inline-block text-[10px] font-extrabold uppercase"
-                        :class="{
-                              'text-emerald-400': rm.current_status === 'available',
-                              'text-amber-400': rm.current_status === 'reserved',
-                              'text-red-400': rm.current_status === 'occupied'
-                          }"
-                        x-text="rm.current_status"></span>
-                </button>
-            </template>
+        <div class="bg-theme-card border border-theme-border rounded-2xl p-4 shadow-xs">
+            <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono text-[10px] font-extrabold uppercase">Rule 02 • Window</span>
+            <p class="text-sm font-extrabold text-theme-text mt-1.5">Today or 1 Day Ahead</p>
+            <p class="text-[11px] text-theme-muted mt-0.5">Reservations can only be scheduled for Today or Tomorrow.</p>
+        </div>
+        <div class="bg-theme-card border border-theme-border rounded-2xl p-4 shadow-xs">
+            <span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 font-mono text-[10px] font-extrabold uppercase">Rule 03 • Daily Quota</span>
+            <p class="text-sm font-extrabold text-theme-text mt-1.5">1 Booking / Rep / Day</p>
+            <p class="text-[11px] text-theme-muted mt-0.5">A representative can book 1 two-hour slot per day.</p>
+        </div>
+        <div class="bg-theme-card border border-theme-border rounded-2xl p-4 shadow-xs">
+            <span class="px-2 py-0.5 rounded bg-purple-500/15 text-purple-400 font-mono text-[10px] font-extrabold uppercase">Rule 04 • Unlocking</span>
+            <p class="text-sm font-extrabold text-theme-text mt-1.5">Min. 6 Present at Desk</p>
+            <p class="text-[11px] text-theme-muted mt-0.5">At least 6 tagged members must check in physically at the Help Desk.</p>
         </div>
     </div>
 
-    <!-- Main 2-Column Layout -->
+    <!-- Collapsible 4th Floor Interactive Map -->
+    <div x-show="showFloorMap" x-cloak x-transition class="bg-theme-card border border-theme-border rounded-2xl p-4 sm:p-5 shadow-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div>
+                <h2 class="text-sm sm:text-base font-extrabold text-theme-text">4th Floor East Wing — Discussion Rooms A to G</h2>
+                <p class="text-xs text-theme-muted">Click any Discussion Room (<span class="font-mono text-emerald-400 font-bold">Room A – Room G</span>) on the right wall of the map to select it.</p>
+            </div>
+        </div>
+        <?php include __DIR__ . '/../includes/map_svg.php'; ?>
+    </div>
+
+    <!-- Main 12-Column Reservation Workspace -->
     <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
-        <!-- LEFT 7 COLUMNS: RESERVATION BUILDER FORM -->
-        <div class="xl:col-span-7 bg-theme-card border border-theme-border rounded-2xl p-5 sm:p-6 shadow-xs">
-            <div class="flex items-center justify-between pb-4 mb-5 border-b border-theme-border">
-                <div>
-                    <h2 class="text-base font-extrabold text-theme-text">Create Discussion Room Reservation</h2>
-                    <p class="text-xs text-theme-muted">Representative: <strong class="text-theme-text"><?= e($_SESSION['full_name']) ?></strong> (<span class="font-mono text-theme-accent">#<?= e($_SESSION['school_id']) ?></span>)</p>
-                </div>
-                <span class="px-3 py-1 rounded-full text-xs font-extrabold"
-                    :class="totalGroupSize >= 6 && totalGroupSize <= 8 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
-                    x-text="totalGroupSize + ' / 8 Pax Selected'"></span>
-            </div>
+        <!-- LEFT 7 COLUMNS: INTERACTIVE ROOM & GROUP ROSTER BUILDER -->
+        <div class="xl:col-span-7 bg-theme-card border border-theme-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-6">
 
-            <!-- CENTERED SCREEN RESPONSE MODAL -->
-            <div x-show="alertMsg" x-cloak
-                class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
-                x-transition>
-                <div @click.away="alertMsg = ''"
-                    :class="alertSuccess ? 'border-emerald-500' : 'border-[#D9232A]'"
-                    class="w-full max-w-md bg-theme-card border-2 rounded-2xl shadow-2xl p-6 text-center space-y-4">
-                    <div :class="alertSuccess ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'"
-                        class="w-14 h-14 rounded-2xl border mx-auto flex items-center justify-center text-2xl font-extrabold">
-                        <span x-text="alertSuccess ? '✓' : '⚠️'"></span>
-                    </div>
-                    <div>
-                        <h3 class="text-base font-extrabold" :class="alertSuccess ? 'text-emerald-400' : 'text-red-400'"
-                            x-text="alertSuccess ? 'Reservation Updated' : 'Policy / Booking Notice'"></h3>
-                        <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="alertMsg"></p>
-                    </div>
-                    <button type="button" @click="alertMsg = ''"
-                        :class="alertSuccess ? 'bg-emerald-500 text-slate-950' : 'bg-[#D9232A] text-white'"
-                        class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
-                        OK
+            <!-- Step 1: Date Selection Cards -->
+            <div>
+                <label class="block text-xs font-extrabold uppercase tracking-wider text-theme-muted mb-2">
+                    1. Select Reservation Date (Today or 1 Day in Advance)
+                </label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button type="button"
+                            @click="selectedDate = today; fetchInit()"
+                            :class="selectedDate === today ? 'border-theme-accent bg-theme-accent/15 ring-2 ring-theme-accent' : 'border-theme-border bg-theme-main hover:bg-theme-hover'"
+                            class="p-3.5 rounded-xl border text-left transition flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-extrabold text-theme-text">Today's Schedule</p>
+                            <p class="text-[11px] font-mono text-theme-muted mt-0.5" x-text="today"></p>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-400"> Same-Day </span>
+                    </button>
+
+                    <button type="button"
+                            @click="selectedDate = tomorrow; fetchInit()"
+                            :class="selectedDate === tomorrow ? 'border-theme-accent bg-theme-accent/15 ring-2 ring-theme-accent' : 'border-theme-border bg-theme-main hover:bg-theme-hover'"
+                            class="p-3.5 rounded-xl border text-left transition flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-extrabold text-theme-text">Tomorrow (1 Day Advance)</p>
+                            <p class="text-[11px] font-mono text-theme-muted mt-0.5" x-text="tomorrow"></p>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-sky-500/20 text-sky-400"> +1 Day </span>
                     </button>
                 </div>
             </div>
 
-            <form @submit.prevent="submitBooking()" class="space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[11px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">
-                            Step 1: Intended Date (Max 1 Day Advance)
-                        </label>
-                        <select x-model="form.reservation_date" @change="initData()"
-                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text outline-none">
-                            <option :value="today" x-text="'Today (' + today + ')'"></option>
-                            <option :value="tomorrow" x-text="'Tomorrow (' + tomorrow + ' — 1 Day Advance)'"></option>
-                        </select>
-                    </div>
+            <!-- Step 2: Interactive Discussion Rooms A–G Grid -->
+            <div>
+                <label class="block text-xs font-extrabold uppercase tracking-wider text-theme-muted mb-2">
+                    2. Choose Discussion Room (Rooms A–G • 6 to 8 Pax)
+                </label>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <template x-for="room in rooms" :key="room.id">
+                        <button type="button"
+                                :disabled="room.current_status === 'maintenance'"
+                                @click="selectedSpaceId = room.id"
+                                :class="selectedSpaceId == room.id
+                                    ? 'border-theme-accent bg-theme-accent/15 ring-2 ring-theme-accent'
+                                    : 'border-theme-border bg-theme-main hover:bg-theme-hover disabled:opacity-40'"
+                                class="p-3 rounded-xl border text-left transition flex flex-col justify-between">
+                            <div class="flex items-center justify-between w-full">
+                                <span class="text-xs font-extrabold text-theme-text" x-text="room.space_name"></span>
+                                <span class="w-2.5 h-2.5 rounded-full shrink-0"
+                                      :class="{
+                                          'bg-emerald-500': room.current_status === 'available',
+                                          'bg-amber-500': room.current_status === 'reserved',
+                                          'bg-red-500': room.current_status === 'occupied',
+                                          'bg-slate-500': room.current_status === 'maintenance'
+                                      }"></span>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between text-[10px]">
+                                <span class="font-mono text-theme-muted" x-text="room.min_capacity + '–' + room.max_capacity + ' Pax'"></span>
+                                <span class="uppercase font-extrabold"
+                                      :class="{
+                                          'text-emerald-400': room.current_status === 'available',
+                                          'text-amber-400': room.current_status === 'reserved',
+                                          'text-red-400': room.current_status === 'occupied',
+                                          'text-slate-400': room.current_status === 'maintenance'
+                                      }"
+                                      x-text="room.current_status"></span>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
 
+            <!-- Step 3: Interactive 2-Hour Time Slot Buttons -->
+            <div>
+                <label class="block text-xs font-extrabold uppercase tracking-wider text-theme-muted mb-2">
+                    3. Select 2-Hour Time Slot
+                </label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    <template x-for="slot in timeSlots" :key="slot.value">
+                        <button type="button"
+                                :disabled="isSlotTaken(slot.start)"
+                                @click="selectedTimeSlot = slot.value"
+                                :class="isSlotTaken(slot.start)
+                                    ? 'border-red-500/30 bg-red-500/10 text-red-400 opacity-60 cursor-not-allowed'
+                                    : (selectedTimeSlot === slot.value
+                                        ? 'border-theme-accent bg-theme-accent text-white shadow-md'
+                                        : 'border-theme-border bg-theme-main text-theme-text hover:bg-theme-hover')"
+                                class="p-3 rounded-xl border text-xs font-mono font-extrabold transition flex items-center justify-between">
+                            <span x-text="slot.label"></span>
+                            <span class="text-[10px] uppercase px-2 py-0.5 rounded"
+                                  :class="isSlotTaken(slot.start) ? 'bg-red-500/20 text-red-300' : (selectedTimeSlot === slot.value ? 'bg-white/20 text-white' : 'bg-emerald-500/15 text-emerald-400')"
+                                  x-text="isSlotTaken(slot.start) ? 'Booked' : 'Open'"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Step 4: Research / Study Purpose -->
+            <div>
+                <label class="block text-xs font-extrabold uppercase tracking-wider text-theme-muted mb-1.5">
+                    4. Group Research / Discussion Purpose
+                </label>
+                <input type="text" x-model="purpose"
+                       placeholder="e.g. BSIT Capstone Manuscript Review & System Architecture Defense Prep"
+                       class="w-full px-4 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text focus:border-theme-accent outline-none">
+            </div>
+
+            <!-- Step 5: Tag 5 to 7 Group Companions (9-Digit Student IDs) -->
+            <div class="pt-4 border-t border-theme-border space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                        <label class="block text-[11px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">
-                            Selected Discussion Room
+                        <label class="block text-xs font-extrabold uppercase tracking-wider text-theme-text">
+                            5. Tag Group Companions (5 to 7 BCP Student IDs)
                         </label>
-                        <select x-model="form.space_id" required
-                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text outline-none">
-                            <template x-for="rm in rooms" :key="rm.id">
-                                <option :value="rm.id" x-text="rm.space_name + ' (' + rm.space_code + ' — 6 to 8 Pax)'"></option>
-                            </template>
-                        </select>
+                        <p class="text-[11px] text-theme-muted">Total group size must be 6 to 8 persons (including yourself as Representative).</p>
                     </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-mono font-extrabold shrink-0"
+                          :class="totalGroupSize >= 6 && totalGroupSize <= 8 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'"
+                          x-text="totalGroupSize + ' / 8 Pax (' + (totalGroupSize >= 6 ? 'Ready' : 'Need ' + (6 - totalGroupSize) + ' more') + ')'"></span>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[11px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">
-                            2-Hour Time Slot
-                        </label>
-                        <select x-model="form.time_slot" required
-                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text font-mono outline-none">
-                            <option value="08:00:00|10:00:00">08:00 AM – 10:00 AM</option>
-                            <option value="10:00:00|12:00:00">10:00 AM – 12:00 PM</option>
-                            <option value="13:00:00|15:00:00">01:00 PM – 03:00 PM</option>
-                            <option value="15:00:00|17:00:00">03:00 PM – 05:00 PM</option>
-                        </select>
-                    </div>
+                <form @submit.prevent="lookupAndAddMember()" class="flex gap-2">
+                    <input type="text" x-model="memberIdInput" maxlength="9"
+                           placeholder="Enter 9-digit Student ID (e.g. 240103538)"
+                           class="flex-1 px-4 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs font-mono text-theme-text focus:border-theme-accent outline-none">
+                    <button type="submit"
+                            :disabled="members.length >= 7"
+                            class="px-4 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover disabled:opacity-40 text-white text-xs font-extrabold shadow transition shrink-0">
+                        + Verify & Tag ID
+                    </button>
+                </form>
 
-                    <div>
-                        <label class="block text-[11px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">
-                            Research / Discussion Topic
-                        </label>
-                        <input type="text" x-model="form.purpose" required
-                            placeholder="e.g. BSIT Capstone Chapter 4 System Testing"
-                            class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-xs text-theme-text outline-none">
-                    </div>
-                </div>
-
-                <!-- Step 2: Tag 5 to 7 Group Members -->
-                <div class="p-4 rounded-xl bg-theme-main border border-theme-border space-y-3">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                            <label class="block text-xs font-extrabold text-theme-text">
-                                Step 2: Tag 5 to 7 Group Members (9-Digit BCP Student ID)
-                            </label>
-                            <p class="text-[11px] text-theme-muted">
-                                Total group must be <strong>6 to 8 members</strong> including you as the Representative.
-                            </p>
-                        </div>
-
-                        <button type="button" @click="quickFillClassmates()"
-                            class="px-3 py-1.5 rounded-lg bg-theme-accent/15 text-theme-accent hover:bg-theme-accent hover:text-white text-[11px] font-extrabold transition shrink-0">
-                            ⚡ Demo Quick-Fill 5 Classmates
+                <?php if ($dev_mode): ?>
+                <!-- Dev Mode Only: Capstone Defense Single-PC Simulator -->
+                <div class="p-3.5 rounded-xl bg-theme-main border border-theme-border space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">
+                            ⚡ Capstone Defense Single-PC Scan Simulator
+                        </p>
+                        <button type="button" @click="quickFillCompanions()"
+                                class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 text-[10px] font-extrabold transition">
+                            ⚡ Auto-Fill 5 Groupmates
                         </button>
                     </div>
-
-                    <div class="flex gap-2">
-                        <input type="text" x-model="memberInput"
-                            @keydown.enter.prevent="addMemberById()"
-                            maxlength="9"
-                            placeholder="Enter 9-digit Student ID (e.g. 240103538)"
-                            class="flex-1 px-3.5 py-2.5 rounded-xl bg-theme-card border border-theme-border text-xs font-mono text-theme-text outline-none">
-                        <button type="button" @click="addMemberById()"
-                            :disabled="taggedMembers.length >= 7"
-                            class="px-4 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover disabled:opacity-40 text-white text-xs font-extrabold shrink-0">
-                            + Add Member
-                        </button>
-                    </div>
-
-                    <div class="space-y-1.5 pt-1">
-                        <div class="p-2.5 rounded-lg bg-theme-card border border-theme-accent/40 flex items-center justify-between text-xs">
-                            <div class="flex items-center gap-2">
-                                <span class="w-5 h-5 rounded-full bg-theme-accent text-white font-bold text-[10px] flex items-center justify-center">1</span>
-                                <span class="font-bold text-theme-text"><?= e($_SESSION['full_name']) ?></span>
-                                <span class="font-mono text-[11px] text-theme-accent">#<?= e($_SESSION['school_id']) ?></span>
-                            </div>
-                            <span class="px-2 py-0.5 rounded bg-theme-accent/20 text-theme-accent text-[10px] font-extrabold uppercase">Representative</span>
-                        </div>
-
-                        <template x-for="(m, idx) in taggedMembers" :key="m.school_id">
-                            <div class="p-2.5 rounded-lg bg-theme-card border border-theme-border flex items-center justify-between text-xs">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[10px] flex items-center justify-center" x-text="idx + 2"></span>
-                                    <span class="font-bold text-theme-text" x-text="m.full_name"></span>
-                                    <span class="font-mono text-[11px] text-theme-muted" x-text="'#' + m.school_id + ' (' + (m.program_code || 'BCP') + ')'"></span>
-                                </div>
-                                <button type="button" @click="removeMember(m.school_id)"
-                                    class="text-red-400 hover:text-red-300 text-xs font-extrabold px-2">
-                                    Remove
-                                </button>
-                            </div>
-                        </template>
+                    <div class="flex flex-wrap gap-1.5">
+                        <?php foreach ($sample_companions as$sc): ?>
+                            <button type="button" @click="addSampleId('<?= e($sc['school_id']) ?>')"
+                                    class="px-2.5 py-1 rounded-lg bg-theme-card hover:bg-theme-hover border border-theme-border text-[11px] font-mono font-bold text-sky-400 transition">
+                                + #<?= e($sc['school_id']) ?> (<?= e($sc['full_name']) ?>)
+                            </button>
+                        <?php endforeach; ?>
                     </div>
                 </div>
+                <?php endif; ?>
 
-                <button type="submit"
-                    :disabled="submitting || totalGroupSize < 6 || totalGroupSize > 8"
-                    class="w-full py-3 px-5 rounded-xl bg-theme-accent hover:bg-theme-accentHover disabled:opacity-40 text-white font-extrabold text-xs shadow-lg transition">
-                    <span x-show="!submitting">Confirm Group Reservation (6–8 Members Policy)</span>
-                    <span x-show="submitting" x-cloak>Validating Policy & Saving...</span>
-                </button>
-            </form>
+                <!-- Tagged Group Roster List -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <!-- Representative Card (#1) -->
+                    <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-between text-xs">
+                        <div class="min-w-0">
+                            <p class="text-[10px] font-extrabold uppercase text-emerald-400">1. Representative (You)</p>
+                            <p class="font-extrabold text-theme-text truncate mt-0.5"><?= e($_SESSION['full_name']) ?></p>
+                            <p class="font-mono text-[11px] text-theme-muted">#<?= e($_SESSION['school_id']) ?> • <?= e($_SESSION['program_code'] ?? 'BCP') ?></p>
+                        </div>
+                        <span class="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 text-[10px] font-extrabold shrink-0">REP</span>
+                    </div>
+
+                    <!-- Tagged Companions (#2 to #8) -->
+                    <template x-for="(mem, idx) in members" :key="mem.school_id">
+                        <div class="p-3 rounded-xl bg-theme-main border border-theme-border flex items-center justify-between gap-2 text-xs">
+                            <div class="min-w-0">
+                                <p class="text-[10px] font-extrabold uppercase text-theme-accent" x-text="(idx + 2) + '. Tagged Companion'"></p>
+                                <p class="font-extrabold text-theme-text truncate mt-0.5" x-text="mem.full_name"></p>
+                                <p class="font-mono text-[11px] text-theme-muted" x-text="'#' + mem.school_id + ' • ' + (mem.program_code || 'BCP')"></p>
+                            </div>
+                            <button type="button" @click="removeMember(mem.school_id)"
+                                    class="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white text-[10px] font-extrabold shrink-0 transition">
+                                Remove
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <button type="button"
+                    @click="submitReservation()"
+                    :disabled="totalGroupSize < 6 || totalGroupSize > 8 || isSlotTaken(selectedTimeSlot.split('|')[0])"
+                    class="w-full py-3.5 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-extrabold text-xs shadow-lg transition">
+                ✓ Submit Discussion Room Reservation (<span x-text="totalGroupSize"></span> Members)
+            </button>
         </div>
 
-        <!-- RIGHT 5 COLUMNS: MY GROUP RESERVATIONS (WITH COMPLETE & REMOVE BUTTONS) -->
-        <div class="xl:col-span-5 space-y-4">
-            <div class="bg-theme-card border border-theme-border rounded-2xl p-5 shadow-xs">
-                <h2 class="text-base font-extrabold text-theme-text mb-1">My Discussion Room Bookings</h2>
-                <p class="text-xs text-theme-muted mb-4">
-                    You can mark an active session as <strong>Completed</strong> and <strong>Remove</strong> completed records below.
-                </p>
+        <!-- RIGHT 5 COLUMNS: MY GROUP RESERVATIONS & CHECK-IN TRACKER -->
+        <div class="xl:col-span-5 space-y-6">
+            <div class="bg-theme-card border border-theme-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+                <div class="pb-3 border-b border-theme-border flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-extrabold text-theme-text">My Group Reservations</h2>
+                        <p class="text-xs text-theme-muted">Bookings where you are the Representative or a Tagged Member</p>
+                    </div>
+                </div>
 
                 <template x-if="myBookings.length === 0">
                     <div class="p-8 text-center text-xs text-theme-muted border border-dashed border-theme-border rounded-xl">
@@ -259,63 +325,65 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
                 </template>
 
-                <div class="space-y-3">
-                    <template x-for="bk in myBookings" :key="bk.id">
-                        <div class="p-4 rounded-xl bg-theme-main border border-theme-border space-y-3">
+                <div class="space-y-4">
+                    <template x-for="b in myBookings" :key="b.id">
+                        <div class="p-4 rounded-2xl bg-theme-main border border-theme-border space-y-3 text-xs">
                             <div class="flex items-start justify-between gap-2">
                                 <div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="px-2.5 py-0.5 rounded bg-theme-accent/20 text-theme-accent text-xs font-extrabold" x-text="bk.space_name"></span>
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase"
-                                            :class="{
-                                                  'bg-amber-500/20 text-amber-400': bk.status === 'pending',
-                                                  'bg-emerald-500/20 text-emerald-400': bk.status === 'occupied',
-                                                  'bg-sky-500/20 text-sky-400': bk.status === 'completed',
-                                                  'bg-red-500/20 text-red-400': bk.status === 'violation' || bk.status === 'no_show' || bk.status === 'cancelled'
-                                              }"
-                                            x-text="bk.status"></span>
-                                    </div>
-                                    <p class="text-xs font-mono font-bold text-theme-text mt-1.5"
-                                        x-text="bk.reservation_date + ' • ' + bk.start_time.substring(0,5) + ' – ' + bk.end_time.substring(0,5)"></p>
-                                    <p class="text-xs text-theme-muted mt-0.5" x-text="bk.purpose"></p>
+                                    <span class="px-2.5 py-1 rounded-lg bg-theme-accent/15 text-theme-accent font-extrabold" x-text="b.space_name"></span>
+                                    <p class="font-mono text-[11px] text-theme-muted mt-1.5"
+                                       x-text="b.reservation_date + ' • ' + b.start_time.substring(0,5) + ' – ' + b.end_time.substring(0,5)"></p>
                                 </div>
-
-                                <div class="text-right shrink-0">
-                                    <span class="text-xs font-extrabold text-theme-text" x-text="bk.present_headcount + '/' + bk.members.length + ' Verified'"></span>
-                                    <p class="text-[10px] text-theme-muted">Min 6 required</p>
-                                </div>
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase shrink-0"
+                                      :class="{
+                                          'bg-amber-500/20 text-amber-400': b.status === 'pending',
+                                          'bg-emerald-500/20 text-emerald-400': b.status === 'occupied',
+                                          'bg-sky-500/20 text-sky-400': b.status === 'completed',
+                                          'bg-red-500/20 text-red-400': ['cancelled','no_show','violation'].includes(b.status)
+                                      }"
+                                      x-text="b.status"></span>
                             </div>
 
-                            <!-- Member Badges -->
-                            <div class="flex flex-wrap gap-1.5 pt-2 border-t border-theme-border">
-                                <template x-for="mem in bk.members" :key="mem.school_id">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono border"
-                                        :class="mem.is_present == 1 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'bg-theme-card border-theme-border text-theme-muted'"
-                                        x-text="mem.full_name + ' (#' + mem.school_id + ')'"></span>
+                            <div>
+                                <p class="font-extrabold text-theme-text" x-text="b.purpose"></p>
+                                <p class="text-[11px] text-theme-muted mt-0.5">
+                                    Rep: <strong class="text-theme-text" x-text="b.rep_name"></strong> (#<span x-text="b.rep_school_id"></span>)
+                                    • Desk Headcount: <strong class="font-mono text-emerald-400" x-text="b.present_headcount + ' / ' + b.members.length + ' Present'"></strong>
+                                </p>
+                            </div>
+
+                            <!-- Tagged Group Roster Pills -->
+                            <div class="flex flex-wrap gap-1.5 pt-1">
+                                <template x-for="m in b.members" :key="m.school_id">
+                                    <span class="px-2 py-0.5 rounded-lg border text-[10px] font-mono"
+                                          :class="m.is_present == 1 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 font-bold' : 'bg-theme-card border-theme-border text-theme-muted'">
+                                        <span x-text="m.is_present == 1 ? '✓ ' : ''"></span>
+                                        <span x-text="m.full_name + ' (#' + m.school_id + ')'"></span>
+                                    </span>
                                 </template>
                             </div>
 
-                            <!-- Action Buttons: Cancel, Complete Session, OR Remove Completed -->
-                            <div class="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-theme-border">
-                                <!-- Cancel Pending -->
-                                <button x-show="bk.status === 'pending'"
-                                    type="button" @click="cancelBooking(bk.id)"
-                                    class="px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-slate-950 text-xs font-bold transition">
-                                    Cancel Slot
+                            <!-- Action Buttons -->
+                            <div class="pt-3 border-t border-theme-border flex flex-wrap items-center justify-end gap-2">
+                                <button x-show="b.status === 'pending'"
+                                        type="button"
+                                        @click="cancelBooking(b.id)"
+                                        class="px-3 py-1.5 rounded-xl bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white font-extrabold text-[11px] transition">
+                                    ✕ Cancel Pending
                                 </button>
 
-                                <!-- Mark as Completed -->
-                                <button x-show="bk.status === 'occupied' || bk.status === 'pending'"
-                                    type="button" @click="completeBooking(bk.id)"
-                                    class="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 text-xs font-extrabold transition">
+                                <button x-show="b.status === 'pending' || b.status === 'occupied'"
+                                        type="button"
+                                        @click="completeBooking(b.id)"
+                                        class="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 font-extrabold text-[11px] transition">
                                     ✓ Mark Completed
                                 </button>
 
-                                <!-- Remove Completed Discussion Room Record -->
-                                <button x-show="bk.status === 'completed' || bk.status === 'cancelled' || bk.status === 'no_show' || bk.status === 'violation'"
-                                    type="button" @click="removeBooking(bk.id)"
-                                    class="px-3.5 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white text-xs font-extrabold transition flex items-center gap-1">
-                                    <span>🗑️ Remove Completed</span>
+                                <button x-show="['completed', 'cancelled', 'no_show', 'violation'].includes(b.status)"
+                                        type="button"
+                                        @click="removeBooking(b.id)"
+                                        class="px-3 py-1.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white font-extrabold text-[11px] transition">
+                                    🗑️ Remove Completed
                                 </button>
                             </div>
                         </div>
@@ -325,208 +393,222 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
 
     </div>
-
-    <!-- OFFICIAL DISCUSSION ROOM POLICY MODAL -->
-    <div x-show="showRulesModal" x-cloak
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
-        x-transition>
-        <div @click.away="showRulesModal = false"
-            class="w-full max-w-lg bg-theme-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden">
-            <div class="p-5 border-b border-theme-border flex items-center justify-between">
-                <h3 class="text-base font-extrabold text-theme-text">Bestlink Discussion Rooms A–G Policy</h3>
-                <button @click="showRulesModal = false" class="w-8 h-8 rounded-lg bg-theme-hover text-theme-muted font-bold">&times;</button>
-            </div>
-            <div class="p-5 space-y-3 text-xs text-theme-text leading-relaxed">
-                <p>• The library has <strong>7 discussion rooms (Rooms A–G)</strong> serving as a venue for researchers to discuss and work together.</p>
-                <p>• Use of the room is strictly limited to a <strong>minimum of 6 persons</strong> and a <strong>maximum capacity of 8 people</strong>.</p>
-                <div class="p-3.5 rounded-xl bg-theme-main border border-theme-border space-y-1.5">
-                    <p class="font-extrabold text-theme-accent">How to Reserve Discussion Rooms:</p>
-                    <p><strong>Step 1.</strong> Reservation can be made up to one day before the intended date of use.</p>
-                    <p><strong>Step 2.</strong> The group should choose among themselves a representative who will make the reservation.</p>
-                    <p><strong>Step 3.</strong> The group's representative is allowed to book one discussion room per day.</p>
-                    <p><strong>Step 4.</strong> Only a group with a <strong>minimum of 6 members physically present</strong> at the specified reservation time shall be allowed to enter the room.</p>
-                </div>
-            </div>
-            <div class="px-5 py-3 bg-theme-main border-t border-theme-border flex justify-end">
-                <button @click="showRulesModal = false" class="px-5 py-2 rounded-xl bg-theme-accent text-white text-xs font-bold">Understood</button>
-            </div>
-        </div>
-    </div>
-
 </div>
 
 <script>
-    function roomBookingApp() {
-        return {
-            today: '<?= date('Y-m-d') ?>',
-            tomorrow: '<?= date('Y-m-d', strtotime('+1 day')) ?>',
-            rooms: [],
-            takenSlots: [],
-            myBookings: [],
-            taggedMembers: [],
-            memberInput: '',
-            submitting: false,
-            alertMsg: '',
-            alertSuccess: false,
-            showRulesModal: false,
+function roomReservationApp() {
+    const SAMPLE_IDS = <?= json_encode(array_column($sample_companions, 'school_id')) ?>;
 
-            form: {
-                space_id: 1,
-                reservation_date: '<?= date('Y-m-d') ?>',
-                time_slot: '08:00:00|10:00:00',
-                purpose: ''
-            },
+    return {
+        showFloorMap: false,
+        today: '<?= date('Y-m-d') ?>',
+        tomorrow: '<?= date('Y-m-d', strtotime('+1 day')) ?>',
+        selectedDate: '<?= date('Y-m-d') ?>',
+        selectedSpaceId: 1,
+        selectedTimeSlot: '08:00:00|10:00:00',
+        purpose: '',
+        memberIdInput: '',
+        members: [],
+        rooms: [],
+        spaces: [],
+        takenSlots: [],
+        myBookings: [],
+        feedbackMsg: '',
+        feedbackSuccess: true,
 
-            get totalGroupSize() {
-                return 1 + this.taggedMembers.length;
-            },
+        timeSlots: [
+            { value: '08:00:00|10:00:00', start: '08:00:00', label: '08:00 AM – 10:00 AM' },
+            { value: '10:00:00|12:00:00', start: '10:00:00', label: '10:00 AM – 12:00 PM' },
+            { value: '12:00:00|14:00:00', start: '12:00:00', label: '12:00 PM – 02:00 PM' },
+            { value: '14:00:00|16:00:00', start: '14:00:00', label: '02:00 PM – 04:00 PM' },
+            { value: '16:00:00|18:00:00', start: '16:00:00', label: '04:00 PM – 06:00 PM' }
+        ],
 
-            async initData() {
-                const res = await fetch(`<?= BASE_URL ?>/api/rooms/book_room.php?action=init&date=${this.form.reservation_date}`);
-                const data = await res.json();
-                if (data.success) {
-                    this.rooms = data.rooms;
-                    this.takenSlots = data.taken_slots;
-                    this.myBookings = data.my_bookings;
-                    if (this.rooms.length > 0 && !this.form.space_id) {
-                        this.form.space_id = this.rooms[0].id;
-                    }
+        get totalGroupSize() {
+            return this.members.length + 1;
+        },
+
+        showToast(msg, ok = true) {
+            if (document.activeElement) document.activeElement.blur();
+            this.feedbackMsg = msg;
+            this.feedbackSuccess = ok;
+            this.$nextTick(() => {
+                if (this.$refs.feedbackOkBtn) this.$refs.feedbackOkBtn.focus();
+            });
+        },
+
+        async initPage() {
+            await this.fetchInit();
+            await this.fetchMapSpaces();
+        },
+
+        async fetchInit() {
+            const res = await fetch(`<?= BASE_URL ?>/api/rooms/book_room.php?action=init&date=${this.selectedDate}`);
+            const data = await res.json();
+            if (data.success) {
+                this.today = data.today;
+                this.tomorrow = data.tomorrow;
+                this.rooms = data.rooms;
+                this.takenSlots = data.taken_slots;
+                this.myBookings = data.my_bookings;
+                if (this.rooms.length > 0 && !this.rooms.some(r => r.id == this.selectedSpaceId)) {
+                    this.selectedSpaceId = this.rooms[0].id;
                 }
-            },
-
-            async addMemberById(customId = null) {
-                const idToLookup = (customId || this.memberInput).trim();
-                if (!idToLookup) return;
-
-                if (this.taggedMembers.length >= 7) {
-                    this.showAlert('Maximum capacity reached (8 persons total including Representative).', false);
-                    return;
-                }
-
-                if (this.taggedMembers.some(m => m.school_id === idToLookup)) {
-                    this.showAlert(`Student #${idToLookup} is already in your group list.`, false);
-                    return;
-                }
-
-                const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'lookup_member',
-                        school_id: idToLookup
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    this.taggedMembers.push(data.member);
-                    if (!customId) this.memberInput = '';
-                    this.alertMsg = '';
-                } else {
-                    this.showAlert(data.message, false);
-                }
-            },
-
-            removeMember(schoolId) {
-                this.taggedMembers = this.taggedMembers.filter(m => m.school_id !== schoolId);
-            },
-
-            async quickFillClassmates() {
-                this.taggedMembers = [];
-                const demoIds = ['240103538', '240103539', '240103540', '240103541', '240103542'];
-                for (const id of demoIds) {
-                    await this.addMemberById(id);
-                }
-                if (!this.form.purpose) {
-                    this.form.purpose = 'BSIT Capstone Group Research & System Documentation';
-                }
-            },
-
-            showAlert(msg, success = false) {
-                this.alertMsg = msg;
-                this.alertSuccess = success;
-            },
-
-            async submitBooking() {
-                this.submitting = true;
-                this.alertMsg = '';
-                try {
-                    const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            action: 'create_booking',
-                            space_id: this.form.space_id,
-                            reservation_date: this.form.reservation_date,
-                            time_slot: this.form.time_slot,
-                            purpose: this.form.purpose,
-                            member_school_ids: this.taggedMembers.map(m => m.school_id)
-                        })
-                    });
-                    const data = await res.json();
-                    this.showAlert(data.message, data.success);
-                    if (data.success) {
-                        this.taggedMembers = [];
-                        this.form.purpose = '';
-                        await this.initData();
-                    }
-                } finally {
-                    this.submitting = false;
-                }
-            },
-
-            async cancelBooking(reservationId) {
-                const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'cancel_booking',
-                        reservation_id: reservationId
-                    })
-                });
-                const data = await res.json();
-                this.showAlert(data.message, data.success);
-                await this.initData();
-            },
-
-            async completeBooking(reservationId) {
-                const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'complete_booking',
-                        reservation_id: reservationId
-                    })
-                });
-                const data = await res.json();
-                this.showAlert(data.message, data.success);
-                await this.initData();
-            },
-
-            async removeBooking(reservationId) {
-                const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'remove_booking',
-                        reservation_id: reservationId
-                    })
-                });
-                const data = await res.json();
-                this.showAlert(data.message, data.success);
-                await this.initData();
             }
-        };
-    }
+        },
+
+        async fetchMapSpaces() {
+            const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php?action=map_status');
+            const data = await res.json();
+            if (data.success) {
+                this.spaces = data.spaces;
+            }
+        },
+
+        getSpaceColor(code, type, defaultColor) {
+            const sp = this.spaces.find(s => s.space_code === code);
+            if (!sp) return defaultColor;
+            if (sp.current_status === 'available') return type === 'bg' ? '#064e3b' : '#10b981';
+            if (sp.current_status === 'occupied') return type === 'bg' ? '#450a0a' : '#ef4444';
+            if (sp.current_status === 'reserved') return type === 'bg' ? '#422006' : '#f59e0b';
+            if (sp.current_status === 'maintenance') return type === 'bg' ? '#1e293b' : '#64748b';
+            return defaultColor;
+        },
+
+        showSpaceDetails(code) {
+            const rm = this.rooms.find(r => r.space_code === code);
+            if (rm) {
+                this.selectedSpaceId = rm.id;
+                this.showToast(`Selected ${rm.space_name} (${rm.min_capacity}–${rm.max_capacity} Pax).`, true);
+            }
+        },
+
+        isShelfHighlighted() { return false; },
+        selectShelfFromMap() {},
+
+        isSlotTaken(startTime) {
+            return this.takenSlots.some(
+                t => t.space_id == this.selectedSpaceId && t.start_time === startTime
+            );
+        },
+
+        async addSampleId(schoolId) {
+            this.memberIdInput = schoolId;
+            await this.lookupAndAddMember();
+        },
+
+        async quickFillCompanions() {
+            for (const sid of SAMPLE_IDS) {
+                if (this.members.length >= 5) break;
+                if (!this.members.some(m => m.school_id === sid)) {
+                    this.memberIdInput = sid;
+                    await this.lookupAndAddMember();
+                }
+            }
+            if (!this.purpose) {
+                this.purpose = 'BSIT Capstone Manuscript & System Architecture Review';
+            }
+        },
+
+        async lookupAndAddMember() {
+            const id = String(this.memberIdInput || '').trim();
+            if (!id) return;
+
+            if (this.members.length >= 7) {
+                this.showToast('Maximum capacity reached (8 persons total including Representative).', false);
+                return;
+            }
+
+            if (this.members.some(m => m.school_id === id)) {
+                this.showToast(`Student ID #${id} is already tagged in your group.`, false);
+                return;
+            }
+
+            const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'lookup_member', school_id: id })
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.members.push(data.member);
+                this.memberIdInput = '';
+            } else {
+                this.showToast(data.message, false);
+            }
+        },
+
+        removeMember(schoolId) {
+            this.members = this.members.filter(m => m.school_id !== schoolId);
+        },
+
+        async submitReservation() {
+            if (this.feedbackMsg) return;
+            const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create_booking',
+                    space_id: this.selectedSpaceId,
+                    reservation_date: this.selectedDate,
+                    time_slot: this.selectedTimeSlot,
+                    purpose: this.purpose,
+                    member_school_ids: this.members.map(m => m.school_id)
+                })
+            });
+            const data = await res.json();
+            this.showToast(data.message, data.success);
+            if (data.success) {
+                this.purpose = '';
+                this.members = [];
+                await this.fetchInit();
+                await this.fetchMapSpaces();
+            }
+        },
+
+        async cancelBooking(id) {
+            const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'cancel_booking', reservation_id: id })
+            });
+            const data = await res.json();
+            this.showToast(data.message, data.success);
+            if (data.success) {
+                await this.fetchInit();
+                await this.fetchMapSpaces();
+            }
+        },
+
+        async completeBooking(id) {
+            const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'complete_booking', reservation_id: id })
+            });
+            const data = await res.json();
+            this.showToast(data.message, data.success);
+            if (data.success) {
+                await this.fetchInit();
+                await this.fetchMapSpaces();
+            }
+        },
+
+        async removeBooking(id) {
+            const res = await fetch('<?= BASE_URL ?>/api/rooms/book_room.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'remove_booking', reservation_id: id })
+            });
+            const data = await res.json();
+            this.showToast(data.message, data.success);
+            if (data.success) {
+                await this.fetchInit();
+                await this.fetchMapSpaces();
+            }
+        }
+    };
+}
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
