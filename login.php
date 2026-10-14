@@ -231,7 +231,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
             <div class="p-4 sm:p-5 border-b border-theme-border flex items-center justify-between bg-theme-main/50">
                 <div>
                     <h3 class="text-base font-extrabold text-theme-text">Account Password Recovery</h3>
-                    <p class="text-xs text-theme-muted">Verify via MailerSend Email OTP, Firebase SMS OTP, or Google Authenticator</p>
+                    <p class="text-xs text-theme-muted">Verify via registered Email OTP, registered SMS OTP, or Google Authenticator</p>
                 </div>
                 <button type="button" @click="forgotOpen = false" class="w-8 h-8 rounded-lg bg-theme-hover text-theme-muted font-bold">&times;</button>
             </div>
@@ -251,7 +251,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                         <div class="p-3 rounded-xl bg-theme-main border border-theme-border flex items-center justify-between">
                             <div>
                                 <p class="font-extrabold text-theme-text" x-text="fp.account.full_name"></p>
-                                <p class="text-[11px] text-theme-muted mt-0.5">Select a verification method below:</p>
+                                <p class="text-[11px] text-theme-muted mt-0.5">Select a registered verification channel:</p>
                             </div>
                             <button type="button" @click="resetRecoveryState()"
                                     class="text-[11px] font-bold text-theme-muted hover:text-theme-text underline">
@@ -266,32 +266,27 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                                 📧 Email OTP
                                 <p class="text-[10px] font-normal truncate mt-0.5" x-text="fp.account.email_masked"></p>
                             </button>
-                            <button type="button" @click="fp.auth_method = 'sms'"
-                                    :class="fp.auth_method === 'sms' ? 'border-theme-accent bg-theme-hover text-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
+                            <button type="button"
+                                    :disabled="!fp.account.phone_masked"
+                                    @click="fp.auth_method = 'sms'"
+                                    :class="fp.auth_method === 'sms' ? 'border-theme-accent bg-theme-hover text-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted disabled:opacity-40 disabled:cursor-not-allowed'"
                                     class="p-2.5 rounded-xl border text-left font-extrabold">
                                 📱 Firebase SMS
-                                <p class="text-[10px] font-normal truncate mt-0.5" x-text="fp.account.phone_masked || 'Enter Mobile No.'"></p>
+                                <p class="text-[10px] font-normal font-mono truncate mt-0.5" x-text="fp.account.phone_masked || 'Not Registered'"></p>
                             </button>
-                            <button type="button" @click="fp.auth_method = 'ga'"
-                                    :class="fp.auth_method === 'ga' ? 'border-theme-accent bg-theme-hover text-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
+                            <button type="button"
+                                    :disabled="!fp.account.ga_enabled"
+                                    @click="fp.auth_method = 'ga'"
+                                    :class="fp.auth_method === 'ga' ? 'border-theme-accent bg-theme-hover text-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted disabled:opacity-40 disabled:cursor-not-allowed'"
                                     class="p-2.5 rounded-xl border text-left font-extrabold">
                                 🔐 2FA App
                                 <p class="text-[10px] font-normal mt-0.5" x-text="fp.account.ga_enabled ? 'Authenticator' : 'Not Linked'"></p>
                             </button>
                         </div>
 
-                        <!-- Editable Mobile Number Input when SMS is chosen -->
-                        <div x-show="fp.auth_method === 'sms'" class="p-3 rounded-xl bg-theme-main border border-theme-border space-y-1.5">
-                            <label class="block text-[10px] font-extrabold uppercase text-theme-muted">
-                                Philippine Mobile Number for SMS OTP (09XX... or +639XX...):
-                            </label>
-                            <input type="text" x-model="fp.phone_override" placeholder="e.g. 09171234567"
-                                   class="w-full px-3 py-2 rounded-lg bg-theme-card border border-theme-border font-mono font-bold text-xs text-theme-text outline-none focus:border-theme-accent">
-                        </div>
-
                         <div x-show="fp.auth_method === 'email' || fp.auth_method === 'sms'" class="flex items-center justify-between gap-2 p-3 rounded-xl bg-theme-main border border-theme-border">
                             <span class="text-[11px] text-theme-muted"
-                                  x-text="fp.auth_method === 'email' ? 'Send 6-digit code via MailerSend:' : 'Send 6-digit SMS via Firebase:'"></span>
+                                  x-text="fp.auth_method === 'email' ? 'Send 6-digit code to ' + fp.account.email_masked : 'Send 6-digit SMS to ' + fp.account.phone_masked"></span>
                             <button type="button" @click="sendRecoveryOtp()" :disabled="fp.sendingOtp"
                                     class="px-3.5 py-2 rounded-xl bg-theme-accent disabled:opacity-50 text-white font-extrabold">
                                 <span x-text="fp.sendingOtp ? '⏳ Sending...' : '📨 Send Code'"></span>
@@ -299,7 +294,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                         </div>
 
                         <div x-show="fp.demo_otp" class="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 font-mono text-[11px]">
-                            🧪 <strong>OTP Code:</strong> <span class="font-extrabold underline select-all" x-text="fp.demo_otp"></span>
+                            🧪 <strong>Dev Mode Fallback OTP:</strong> <span class="font-extrabold underline select-all" x-text="fp.demo_otp"></span>
                         </div>
 
                         <form @submit.prevent="resetForgottenPassword()" class="space-y-3">
@@ -337,7 +332,6 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                 identifier: '',
                 account: null,
                 auth_method: 'email',
-                phone_override: '',
                 otp_code: '',
                 new_password: '',
                 confirm_password: '',
@@ -409,7 +403,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
 
             resetRecoveryState() {
                 this.fp.account = null;
-                this.fp.phone_override = '';
+                this.fp.auth_method = 'email';
                 this.fp.otp_code = '';
                 this.fp.new_password = '';
                 this.fp.confirm_password = '';
@@ -426,7 +420,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                 const data = await res.json();
                 if (data.success) {
                     this.fp.account = data.account;
-                    this.fp.phone_override = data.account.contact_no || '';
+                    this.fp.auth_method = 'email';
                 } else {
                     this.showAlert(data.message, false);
                 }
@@ -443,8 +437,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                         body: JSON.stringify({
                             action: 'send_otp',
                             identifier: this.fp.identifier,
-                            channel: this.fp.auth_method,
-                            phone_override: this.fp.phone_override
+                            channel: this.fp.auth_method
                         })
                     });
                     const data = await res.json();
@@ -463,15 +456,14 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                         const fbRes = await window.basaSendFirebaseSms(data.phone_e164);
                         if (fbRes.success) {
                             this.fp.otp_code = '';
-                            this.showAlert(`Firebase SMS OTP sent to ${data.phone_e164}! Check your phone messages.`, true);
+                            this.showAlert(`Firebase SMS OTP sent to your registered number (${this.fp.account.phone_masked})!`, true);
                             return;
                         } else {
-                            // Provide fallback OTP if Firebase project is on free Spark tier
                             if (data.fallback_otp) {
                                 this.fp.demo_otp = data.fallback_otp;
                                 this.fp.otp_code = data.fallback_otp;
                             }
-                            this.showAlert(`${fbRes.error} (Fallback OTP activated below so you can continue testing).`, false);
+                            this.showAlert(`${fbRes.error}`, false);
                             return;
                         }
                     }
@@ -503,7 +495,6 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                         action: 'reset_password',
                         identifier: this.fp.identifier,
                         auth_method: this.fp.auth_method,
-                        phone_override: this.fp.phone_override,
                         otp_code: this.fp.otp_code,
                         firebase_id_token: firebaseIdToken,
                         new_password: this.fp.new_password,

@@ -302,7 +302,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div x-show="forgotMode" x-cloak x-transition class="space-y-4 text-xs">
                     <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px]">
-                        🔐 <strong>Forgot Password Recovery:</strong> Choose MailerSend Email OTP, Firebase SMS OTP, or Google Authenticator below.
+                        🔐 <strong>Forgot Password Recovery:</strong> Choose your registered MailerSend Email, registered Firebase SMS number, or Google Authenticator below.
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -313,28 +313,23 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             <p class="text-[10px] opacity-75 font-normal mt-0.5 truncate" x-text="profile.email"></p>
                         </button>
 
-                        <button type="button" @click="forgotForm.auth_method = 'sms'"
-                                :class="forgotForm.auth_method === 'sms' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
+                        <button type="button"
+                                :disabled="!profile.contact_no"
+                                @click="forgotForm.auth_method = 'sms'"
+                                :class="forgotForm.auth_method === 'sms' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted disabled:opacity-40 disabled:cursor-not-allowed'"
                                 class="p-3 rounded-xl border font-extrabold text-left transition">
                             <p>📱 Firebase SMS OTP</p>
-                            <p class="text-[10px] opacity-75 font-normal mt-0.5 font-mono" x-text="profile.contact_no || 'Enter Mobile No.'"></p>
+                            <p class="text-[10px] opacity-75 font-normal mt-0.5 font-mono" x-text="profile.contact_no || 'No Contact No. Saved'"></p>
                         </button>
 
-                        <button type="button" @click="forgotForm.auth_method = 'ga'"
-                                :class="forgotForm.auth_method === 'ga' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted'"
+                        <button type="button"
+                                :disabled="profile.ga_enabled != 1"
+                                @click="forgotForm.auth_method = 'ga'"
+                                :class="forgotForm.auth_method === 'ga' ? 'border-theme-accent bg-theme-hover text-theme-accent ring-1 ring-theme-accent' : 'border-theme-border bg-theme-main text-theme-muted disabled:opacity-40 disabled:cursor-not-allowed'"
                                 class="p-3 rounded-xl border font-extrabold text-left transition">
                             <p>🔐 Authenticator 2FA</p>
                             <p class="text-[10px] opacity-75 font-normal mt-0.5" x-text="profile.ga_enabled == 1 ? '6-Digit App Code' : 'Setup in 2FA card below'"></p>
                         </button>
-                    </div>
-
-                    <!-- Editable Mobile Number Input when SMS is chosen -->
-                    <div x-show="forgotForm.auth_method === 'sms'" class="p-3.5 rounded-xl bg-theme-main border border-theme-border space-y-1.5">
-                        <label class="block text-[10px] font-extrabold uppercase text-theme-muted">
-                            Philippine Mobile Number for SMS OTP (09XX... or +639XX...):
-                        </label>
-                        <input type="text" x-model="forgotForm.phone_override" placeholder="e.g. 09171234567"
-                               class="w-full px-3.5 py-2 rounded-xl bg-theme-card border border-theme-border font-mono font-bold text-xs text-theme-text outline-none focus:border-theme-accent">
                     </div>
 
                     <div x-show="forgotForm.auth_method === 'email' || forgotForm.auth_method === 'sms'"
@@ -342,8 +337,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
                                 <p class="font-extrabold text-theme-text"
-                                   x-text="forgotForm.auth_method === 'email' ? 'Send MailerSend OTP to ' + profile.email : 'Send Firebase SMS to ' + (forgotForm.phone_override || profile.contact_no || 'Mobile No.')"></p>
-                                <p class="text-[11px] text-theme-muted">Click to receive a 6-digit password reset code.</p>
+                                   x-text="forgotForm.auth_method === 'email' ? 'Send MailerSend OTP to ' + profile.email : 'Send Firebase SMS to ' + profile.contact_no"></p>
+                                <p class="text-[11px] text-theme-muted">Click to dispatch a 6-digit password reset code to your registered contact.</p>
                             </div>
                             <button type="button" @click="sendOtpCode()" :disabled="sendingOtp"
                                     class="px-4 py-2 rounded-xl bg-theme-accent disabled:opacity-50 text-white font-extrabold shrink-0 shadow">
@@ -352,7 +347,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </div>
 
                         <div x-show="demoOtpCode" x-cloak class="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-400 font-mono">
-                            🧪 <strong>OTP Code:</strong> <span class="text-sm font-extrabold underline select-all" x-text="demoOtpCode"></span>
+                            🧪 <strong>Dev Mode Fallback OTP:</strong> <span class="text-sm font-extrabold underline select-all" x-text="demoOtpCode"></span>
                         </div>
                     </div>
 
@@ -543,7 +538,6 @@ function profileSecurityApp() {
 
         forgotForm: {
             auth_method: 'email',
-            phone_override: '',
             otp_code: '',
             new_password: '',
             confirm_password: ''
@@ -573,7 +567,6 @@ function profileSecurityApp() {
                 const data = await res.json();
                 if (data.success && data.profile) {
                     this.profile = data.profile;
-                    this.forgotForm.phone_override = data.profile.contact_no || '';
                     this.isUnlocked = !this.profile.has_pin;
                 }
             } catch (e) {
@@ -703,7 +696,6 @@ function profileSecurityApp() {
                     this.showToast(data.message, data.success);
                     if (data.success) {
                         this.editingPersonal = false;
-                        this.forgotForm.phone_override = this.profile.contact_no || '';
                     }
                 } catch (e) {
                     this.showToast('Server error while saving personal info.', false);
@@ -797,7 +789,6 @@ function profileSecurityApp() {
                         body: JSON.stringify({ 
                             action: 'send_otp', 
                             channel: this.forgotForm.auth_method,
-                            phone_override: this.forgotForm.phone_override,
                             profile_pin: pinCode
                         })
                     });
@@ -805,10 +796,6 @@ function profileSecurityApp() {
                     if (!data.success) {
                         this.showToast(data.message, false);
                         return;
-                    }
-
-                    if (data.contact_no) {
-                        this.profile.contact_no = data.contact_no;
                     }
 
                     if (data.demo_otp) {
@@ -827,7 +814,7 @@ function profileSecurityApp() {
                                 this.demoOtpCode = data.fallback_otp;
                                 this.forgotForm.otp_code = data.fallback_otp;
                             }
-                            this.showToast(`${fbRes.error} (Fallback OTP activated below so you can continue testing).`, false);
+                            this.showToast(`${fbRes.error}`, false);
                             return;
                         }
                     }
