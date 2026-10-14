@@ -21,6 +21,32 @@ while ($r = $stmt_set->fetch()) {
 $daily_fine_rate    = (float) ($settings['daily_fine_rate'] ?? 10.00);
 $loan_duration_days = (int) ($settings['loan_duration_days'] ?? 3);
 
+// Helper: Attach Student Unpaid Balance / Debt Details
+function attach_student_debt(object $pdo, array $student): array {
+    $stmt_bal = $pdo->prepare("
+        SELECT COALESCE(SUM(fine_amount), 0.00)
+        FROM borrow_transactions
+        WHERE borrower_id = ? AND fine_status = 'unpaid' AND fine_amount > 0
+    ");
+    $stmt_bal->execute([$student['id']]);
+    $student['unpaid_balance'] = (float) $stmt_bal->fetchColumn();
+
+    $stmt_items = $pdo->prepare("
+        SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount,
+               ia.accession_no, ci.title
+        FROM borrow_transactions bt
+        JOIN item_accessions ia ON bt.accession_id = ia.id
+        JOIN catalog_items ci ON ia.catalog_id = ci.id
+        WHERE bt.borrower_id = ? AND bt.fine_status = 'unpaid' AND bt.fine_amount > 0
+        ORDER BY bt.id DESC
+    ");
+    $stmt_items->execute([$student['id']]);
+    $student['unpaid_items'] = $stmt_items->fetchAll();
+
+    return $student;
+}
+
+// Helper: Fetch Book Accession + Active Loan Details
 function get_accession_details(object $pdo, string $accession_no, float $daily_fine_rate): ?array {
     $stmt = $pdo->prepare("
         SELECT ia.*, ci.material_type, ci.isbn_or_doc_id, ci.title, ci.authors,
@@ -108,6 +134,8 @@ if ($action === 'scan_decode') {
         }
 
         unset($user['totp_secret']);
+        $user = attach_student_debt($pdo, $user);
+
         $book = get_accession_details($pdo, $accession_no, $daily_fine_rate);
         if (!$book) {
             echo json_encode(['success' => false, 'message' => "Book accession {$accession_no} not found."]);
@@ -131,11 +159,13 @@ if ($action === 'scan_decode') {
             echo json_encode(['success' => false, 'message' => $verification['message']]);
             exit();
         }
+        $student = attach_student_debt($pdo, $verification['user']);
+        $debt_note = $student['unpaid_balance'] > 0 ? " (Unpaid Balance: ₱" . number_format($student['unpaid_balance'], 2) . ")" : "";
         echo json_encode([
             'success'   => true,
             'scan_type' => 'student_qr',
-            'student'   => $verification['user'],
-            'message'   => "Live 30s TOTP Verified for {$verification['user']['full_name']} (#{$verification['user']['school_id']})."
+            'student'   => $student,
+            'message'   => "Live 30s TOTP Verified for {$student['full_name']} (#{$student['school_id']}){$debt_note}."
         ]);
         exit();
     }
@@ -151,11 +181,13 @@ if ($action === 'scan_decode') {
         }
         $live_totp = generate_student_totp($u_sec['school_id'], $u_sec['totp_secret']);
         $verification = verify_student_totp($live_totp['qr_payload'], $pdo);
+        $student = attach_student_debt($pdo, $verification['user']);
+        $debt_note = $student['unpaid_balance'] > 0 ? " (Unpaid Balance: ₱" . number_format($student['unpaid_balance'], 2) . ")" : "";
         echo json_encode([
             'success'   => true,
             'scan_type' => 'student_qr',
-            'student'   => $verification['user'],
-            'message'   => "Simulated Live 30s TOTP Scan for {$verification['user']['full_name']} (#{$sim_id})."
+            'student'   => $student,
+            'message'   => "Simulated Live 30s TOTP Scan for {$student['full_name']} (#{$sim_id}){$debt_note}."
         ]);
         exit();
     }
@@ -233,11 +265,12 @@ if ($action === 'checkout') {
     exit();
 }
 
-// 3. CLOSED-LOOP BOOK RETURN & FINE SETTLEMENT (Supports Damaged Book Penalty)
+// 3. CLOSED-LOOP BOOK RETURN & CUSTOM DAMAGED FINE SETTLEMENT
 if ($action === 'return_book') {
     $accession_id   = (int) ($input['accession_id'] ?? 0);
     $fine_action    = trim($input['fine_status'] ?? 'none');
     $book_condition = trim($input['book_condition'] ?? 'good');
+    $damaged_fee    = max(0.00, (float) ($input['damaged_fee'] ?? 300.00));
 
     $stmt_tx = $pdo->prepare("
         SELECT bt.*, ia.accession_no, ia.placement_code, ci.title, u.school_id, u.full_name
@@ -266,9 +299,9 @@ if ($action === 'return_book') {
         $fine_amount  = round($overdue_days * $daily_fine_rate, 2);
     }
 
-    // Calculate Damaged Penalty Fee
-    $penalty_fee = ($book_condition === 'damaged') ? 300.00 : 0.00;
-    $total_fine = $fine_amount + $penalty_fee;
+    // Apply Librarian-specified Damaged Penalty Fee
+    $penalty_fee = ($book_condition === 'damaged') ? round($damaged_fee, 2) : 0.00;
+    $total_fine  = $fine_amount + $penalty_fee;
 
     $final_fine_status = 'none';
     if ($total_fine > 0) {
@@ -291,20 +324,31 @@ if ($action === 'return_book') {
         $pdo->prepare("UPDATE item_accessions SET status = ? WHERE id = ?")
             ->execute([$new_book_status, $accession_id]);
 
-        $cond_text = ($book_condition === 'damaged') ? "DAMAGED (₱300 Penalty)" : "Good";
+        $formatted_penalty = number_format($penalty_fee, 2);
+        $cond_text = ($book_condition === 'damaged') ? "DAMAGED (₱{$formatted_penalty} Penalty)" : "Good";
         $event = ($final_fine_status === 'waived') ? 'FINE_WAIVED' : 'BOOK_RETURN';
         log_action($pdo, $staff_id, $event, "Returned {$tx['accession_no']} from Student #{$tx['school_id']}. Cond: {$cond_text}. Fine: ₱{$total_fine} ({$final_fine_status}). Restored to {$tx['placement_code']}.");
 
         $pdo->commit();
 
+        // Refresh scanned student's unpaid balance if they are loaded
+        $stmt_u = $pdo->prepare("SELECT id, school_id, full_name, role, program_code, photo_path, status FROM users WHERE id = ? LIMIT 1");
+        $stmt_u->execute([$tx['borrower_id']]);
+        $updated_student = $stmt_u->fetch();
+        if ($updated_student) {
+            $updated_student = attach_student_debt($pdo, $updated_student);
+        }
+
         if ($book_condition === 'damaged') {
             echo json_encode([
                 'success' => true,
-                'message' => "Return Processed! ₱300 Penalty applied. {$tx['accession_no']} is marked as DAMAGED and cannot be borrowed."
+                'student' => $updated_student,
+                'message' => "Return Processed! ₱{$formatted_penalty} Damaged Penalty applied ({$final_fine_status}). {$tx['accession_no']} is marked as DAMAGED."
             ]);
         } else {
             echo json_encode([
                 'success' => true,
+                'student' => $updated_student,
                 'message' => "Return Complete! {$tx['accession_no']} is now AVAILABLE. Reshelve at {$tx['placement_code']}."
             ]);
         }
@@ -315,6 +359,66 @@ if ($action === 'return_book') {
     exit();
 }
 
+// 4. SETTLE STUDENT UNPAID BALANCE / DEBT VIA STUDENT QR
+if ($action === 'settle_student_debt') {
+    $student_id     = (int) ($input['student_id'] ?? 0);
+    $settlement     = trim($input['settlement_type'] ?? 'paid'); // 'paid' or 'waived'
+    $transaction_id = (int) ($input['transaction_id'] ?? 0);      // 0 = settle all unpaid
+
+    if (!in_array($settlement, ['paid', 'waived'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid settlement action.']);
+        exit();
+    }
+
+    $stmt_u = $pdo->prepare("SELECT id, school_id, full_name, role, program_code, photo_path, status FROM users WHERE id = ? LIMIT 1");
+    $stmt_u->execute([$student_id]);
+    $student = $stmt_u->fetch();
+
+    if (!$student) {
+        echo json_encode(['success' => false, 'message' => 'Student account not found.']);
+        exit();
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        if ($transaction_id > 0) {
+            $stmt_amt = $pdo->prepare("SELECT fine_amount FROM borrow_transactions WHERE id = ? AND borrower_id = ? AND fine_status = 'unpaid' LIMIT 1");
+            $stmt_amt->execute([$transaction_id, $student_id]);
+            $settled_amount = (float) $stmt_amt->fetchColumn();
+
+            $pdo->prepare("UPDATE borrow_transactions SET fine_status = ?, received_by_id = COALESCE(received_by_id, ?) WHERE id = ? AND borrower_id = ?")
+                ->execute([$settlement, $staff_id, $transaction_id, $student_id]);
+        } else {
+            $stmt_amt = $pdo->prepare("SELECT COALESCE(SUM(fine_amount), 0.00) FROM borrow_transactions WHERE borrower_id = ? AND fine_status = 'unpaid'");
+            $stmt_amt->execute([$student_id]);
+            $settled_amount = (float) $stmt_amt->fetchColumn();
+
+            $pdo->prepare("UPDATE borrow_transactions SET fine_status = ?, received_by_id = COALESCE(received_by_id, ?) WHERE borrower_id = ? AND fine_status = 'unpaid'")
+                ->execute([$settlement, $staff_id, $student_id]);
+        }
+
+        $event = ($settlement === 'waived') ? 'DEBT_WAIVED' : 'DEBT_PAID';
+        $formatted_amt = number_format($settled_amount, 2);
+        log_action($pdo, $staff_id, $event, "Settled ₱{$formatted_amt} unpaid balance as " . strtoupper($settlement) . " for Student #{$student['school_id']} ({$student['full_name']}).");
+
+        $pdo->commit();
+
+        $student = attach_student_debt($pdo, $student);
+
+        echo json_encode([
+            'success' => true,
+            'student' => $student,
+            'message' => "Student Balance Updated! ₱{$formatted_amt} marked as " . strtoupper($settlement) . " for {$student['full_name']}."
+        ]);
+    } catch (\Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        echo json_encode(['success' => false, 'message' => 'Failed to settle balance: ' . $e->getMessage()]);
+    }
+    exit();
+}
+
+// 5. FETCH RECENT CIRCULATION LOGS
 if ($action === 'recent_activity') {
     $stmt = $pdo->query("
         SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount, bt.fine_status, bt.status,
