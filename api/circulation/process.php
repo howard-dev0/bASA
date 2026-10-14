@@ -12,6 +12,17 @@ $staff_id = (int) $_SESSION['user_id'];
 $input    = json_decode(file_get_contents('php://input'), true) ?? [];
 $action   = $input['action'] ?? ($_GET['action'] ?? '');
 
+// Ensure borrow_transactions.status supports 'damaged' and sync existing damaged returns
+try {
+    $pdo->exec("ALTER TABLE borrow_transactions MODIFY COLUMN status ENUM('active', 'returned', 'overdue', 'damaged') DEFAULT 'active'");
+    $pdo->exec("
+        UPDATE borrow_transactions bt
+        JOIN item_accessions ia ON bt.accession_id = ia.id
+        SET bt.status = 'damaged'
+        WHERE bt.status = 'returned' AND ia.status = 'damaged'
+    ");
+} catch (\Throwable $e) {}
+
 // Fetch system settings (fine rate & loan duration)
 $settings = [];
 $stmt_set = $pdo->query("SELECT setting_key, setting_value FROM system_settings");
@@ -32,7 +43,7 @@ function attach_student_debt(object $pdo, array $student): array {
     $student['unpaid_balance'] = (float) $stmt_bal->fetchColumn();
 
     $stmt_items = $pdo->prepare("
-        SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount,
+        SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount, bt.status,
                ia.accession_no, ci.title
         FROM borrow_transactions bt
         JOIN item_accessions ia ON bt.accession_id = ia.id
@@ -308,25 +319,26 @@ if ($action === 'return_book') {
         $final_fine_status = in_array($fine_action, ['paid', 'unpaid', 'waived'], true) ? $fine_action : 'unpaid';
     }
 
-    $returned_at = date('Y-m-d H:i:s');
+    $returned_at     = date('Y-m-d H:i:s');
     $new_book_status = ($book_condition === 'damaged') ? 'damaged' : 'available';
+    $new_tx_status   = ($book_condition === 'damaged') ? 'damaged' : 'returned';
 
     try {
         $pdo->beginTransaction();
 
         $stmt_upd = $pdo->prepare("
             UPDATE borrow_transactions
-            SET received_by_id = ?, returned_at = ?, fine_amount = ?, fine_status = ?, status = 'returned'
+            SET received_by_id = ?, returned_at = ?, fine_amount = ?, fine_status = ?, status = ?
             WHERE id = ?
         ");
-        $stmt_upd->execute([$staff_id, $returned_at, $total_fine, $final_fine_status, $tx['id']]);
+        $stmt_upd->execute([$staff_id, $returned_at, $total_fine, $final_fine_status, $new_tx_status, $tx['id']]);
 
         $pdo->prepare("UPDATE item_accessions SET status = ? WHERE id = ?")
             ->execute([$new_book_status, $accession_id]);
 
         $formatted_penalty = number_format($penalty_fee, 2);
         $cond_text = ($book_condition === 'damaged') ? "DAMAGED (₱{$formatted_penalty} Penalty)" : "Good";
-        $event = ($final_fine_status === 'waived') ? 'FINE_WAIVED' : 'BOOK_RETURN';
+        $event = ($final_fine_status === 'waived') ? 'FINE_WAIVED' : ($book_condition === 'damaged' ? 'BOOK_DAMAGED' : 'BOOK_RETURN');
         log_action($pdo, $staff_id, $event, "Returned {$tx['accession_no']} from Student #{$tx['school_id']}. Cond: {$cond_text}. Fine: ₱{$total_fine} ({$final_fine_status}). Restored to {$tx['placement_code']}.");
 
         $pdo->commit();
@@ -343,7 +355,7 @@ if ($action === 'return_book') {
             echo json_encode([
                 'success' => true,
                 'student' => $updated_student,
-                'message' => "Return Processed! ₱{$formatted_penalty} Damaged Penalty applied ({$final_fine_status}). {$tx['accession_no']} is marked as DAMAGED."
+                'message' => "Damaged Return Logged! ₱{$formatted_penalty} Penalty applied ({$final_fine_status}). {$tx['accession_no']} is marked as DAMAGED."
             ]);
         } else {
             echo json_encode([
@@ -421,9 +433,14 @@ if ($action === 'settle_student_debt') {
 // 5. FETCH RECENT CIRCULATION LOGS
 if ($action === 'recent_activity') {
     $stmt = $pdo->query("
-        SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount, bt.fine_status, bt.status,
+        SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount, bt.fine_status,
+               CASE
+                   WHEN bt.status = 'damaged' THEN 'damaged'
+                   WHEN bt.status = 'active' AND bt.due_date < NOW() THEN 'overdue'
+                   ELSE bt.status
+               END AS status,
                u.school_id, u.full_name,
-               ia.accession_no, ia.placement_code,
+               ia.accession_no, ia.placement_code, ia.status AS book_status,
                ci.title
         FROM borrow_transactions bt
         JOIN users u ON bt.borrower_id = u.id

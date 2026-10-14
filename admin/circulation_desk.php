@@ -247,7 +247,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-theme-muted">Tier 2 • Physical Book Verification</span>
                         <template x-if="scannedBook">
                             <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase"
-                                  :class="scannedBook.status === 'available' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
+                                  :class="{
+                                      'bg-emerald-500/20 text-emerald-400': scannedBook.status === 'available',
+                                      'bg-amber-500/20 text-amber-400': scannedBook.status === 'borrowed',
+                                      'bg-red-500/20 text-red-400': scannedBook.status === 'damaged' || scannedBook.status === 'lost',
+                                      'bg-indigo-500/20 text-indigo-400': scannedBook.status === 'reserved'
+                                  }"
                                   x-text="scannedBook.status"></span>
                         </template>
                     </div>
@@ -298,7 +303,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <template x-for="item in (scannedStudent?.unpaid_items || [])" :key="item.id">
                         <div class="p-3 rounded-xl bg-theme-main border border-theme-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                             <div>
-                                <p class="font-extrabold text-theme-text" x-text="item.title"></p>
+                                <div class="flex items-center gap-2">
+                                    <p class="font-extrabold text-theme-text" x-text="item.title"></p>
+                                    <span x-show="item.status === 'damaged'" class="px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 text-[9px] font-extrabold uppercase">DAMAGED</span>
+                                </div>
                                 <p class="text-[11px] font-mono text-theme-muted"
                                    x-text="item.accession_no + ' • Due: ' + item.due_date"></p>
                             </div>
@@ -437,7 +445,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <span class="text-[11px] text-theme-muted">Live Audit Feed</span>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs min-w-[560px]">
+                    <table class="w-full text-left text-xs min-w-[600px]">
                         <thead>
                             <tr class="bg-theme-main text-theme-muted uppercase text-[10px] border-b border-theme-border">
                                 <th class="py-2.5 px-4">Student</th>
@@ -449,7 +457,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </thead>
                         <tbody class="divide-y divide-theme-border">
                             <template x-for="lg in recentLogs" :key="lg.id">
-                                <tr>
+                                <tr class="hover:bg-theme-hover/40 transition">
                                     <td class="py-2.5 px-4">
                                         <p class="font-bold text-theme-text" x-text="lg.full_name"></p>
                                         <p class="font-mono text-[10px] text-theme-muted" x-text="'#' + lg.school_id"></p>
@@ -460,13 +468,23 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                     </td>
                                     <td class="py-2.5 px-4 font-mono font-bold text-amber-400" x-text="lg.placement_code"></td>
                                     <td class="py-2.5 px-4 font-mono">
-                                        <span :class="lg.fine_status === 'unpaid' ? 'text-red-400 font-extrabold' : 'text-theme-muted'"
-                                              x-text="'₱' + Number(lg.fine_amount || 0).toFixed(2) + (lg.fine_amount > 0 ? ' (' + lg.fine_status + ')' : '')"></span>
+                                        <span :class="{
+                                                  'text-red-400 font-extrabold': Number(lg.fine_amount) > 0 && lg.fine_status === 'unpaid',
+                                                  'text-emerald-400 font-bold': Number(lg.fine_amount) > 0 && lg.fine_status === 'paid',
+                                                  'text-amber-400 font-bold': Number(lg.fine_amount) > 0 && lg.fine_status === 'waived',
+                                                  'text-theme-muted': Number(lg.fine_amount) === 0
+                                              }"
+                                              x-text="'₱' + Number(lg.fine_amount || 0).toFixed(2) + (Number(lg.fine_amount) > 0 ? ' (' + lg.fine_status + ')' : '')"></span>
                                     </td>
                                     <td class="py-2.5 px-4">
-                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase"
-                                              :class="lg.status === 'returned' ? 'bg-sky-500/20 text-sky-400' : 'bg-emerald-500/20 text-emerald-400'"
-                                              x-text="lg.status"></span>
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase inline-block"
+                                              :class="{
+                                                  'bg-red-500/20 text-red-400 border border-red-500/30': lg.status === 'damaged',
+                                                  'bg-amber-500/20 text-amber-400 border border-amber-500/30': lg.status === 'overdue' || (lg.status === 'returned' && lg.fine_status === 'unpaid'),
+                                                  'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': lg.status === 'active',
+                                                  'bg-sky-500/20 text-sky-400 border border-sky-500/30': lg.status === 'returned' && lg.fine_status !== 'unpaid'
+                                              }"
+                                              x-text="lg.status === 'damaged' ? 'DAMAGED' : (lg.status === 'active' ? 'BORROWED' : (lg.status === 'overdue' ? 'OVERDUE' : (lg.fine_status === 'unpaid' ? 'UNPAID FINE' : 'RETURNED')))"></span>
                                     </td>
                                 </tr>
                             </template>

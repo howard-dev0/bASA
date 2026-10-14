@@ -34,6 +34,13 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('basa_theme') || 'bestlink-dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -64,6 +71,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
 
     <style>
         [x-cloak] { display: none !important; }
+
         :root, [data-theme="bestlink-dark"] {
             --bg-sidebar: #130f40;
             --bg-main: #0f172a;
@@ -75,12 +83,77 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
             --accent-primary: #0089d0;
             --accent-hover: #0271ab;
         }
+
+        [data-theme="bestlink-light"] {
+            --bg-sidebar: #1b1464;
+            --bg-main: #f0f7ff;
+            --bg-card: #ffffff;
+            --bg-hover: #e0f2fe;
+            --border-color: #bae6fd;
+            --text-normal: #0f172a;
+            --text-muted: #475569;
+            --accent-primary: #0089d0;
+            --accent-hover: #1b1464;
+        }
+
+        [data-theme="light-mode"] {
+            --bg-sidebar: #ffffff;
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-hover: #f1f5f9;
+            --border-color: #e2e8f0;
+            --text-normal: #0f172a;
+            --text-muted: #64748b;
+            --accent-primary: #2563eb;
+            --accent-hover: #1d4ed8;
+        }
+
+        [data-theme="discord-dark"] {
+            --bg-sidebar: #2b2d31;
+            --bg-main: #313338;
+            --bg-card: #232428;
+            --bg-hover: #35373c;
+            --border-color: #3f4147;
+            --text-normal: #f2f3f5;
+            --text-muted: #949ba4;
+            --accent-primary: #5865f2;
+            --accent-hover: #4752c4;
+        }
+
+        [data-theme="emerald-scholar"] {
+            --bg-sidebar: #0d1f1a;
+            --bg-main: #132a23;
+            --bg-card: #19382f;
+            --bg-hover: #21473c;
+            --border-color: #2b5c4e;
+            --text-normal: #ecfdf5;
+            --text-muted: #6ee7b7;
+            --accent-primary: #10b981;
+            --accent-hover: #059669;
+        }
     </style>
 </head>
-<body class="bg-theme-main text-theme-text font-sans min-h-screen flex flex-col justify-center items-center p-4 selection:bg-theme-accent selection:text-white"
+<body class="bg-theme-main text-theme-text font-sans min-h-screen flex flex-col justify-center items-center p-4 relative selection:bg-theme-accent selection:text-white transition-colors duration-200"
       x-data="loginPortalApp('<?= e($timeout_notice) ?>')"
       @keydown.escape.window="closeAlert(); forgotOpen = false"
       @keydown.enter.window="if (alertMsg) { $event.preventDefault(); $event.stopPropagation(); closeAlert(); }">
+
+    <!-- TOP BAR: BACK TO HOME & LIGHT/DARK MODE TOGGLE -->
+    <div class="fixed top-4 inset-x-4 max-w-5xl mx-auto flex items-center justify-between z-30 pointer-events-none">
+        <a href="<?= BASE_URL ?>/index.php"
+           class="pointer-events-auto px-3.5 py-2 rounded-xl bg-theme-card hover:bg-theme-hover border border-theme-border text-xs font-extrabold text-theme-text shadow-md transition flex items-center gap-1.5">
+            <span>←</span>
+            <span>Home</span>
+        </a>
+
+        <button type="button"
+                @click="toggleDarkLight()"
+                title="Toggle Light / Dark Mode"
+                class="pointer-events-auto px-3.5 py-2 rounded-xl bg-theme-card hover:bg-theme-hover border border-theme-border text-xs font-extrabold text-theme-text shadow-md transition flex items-center gap-2">
+            <span x-text="theme.includes('light') ? '🌙' : '☀️'"></span>
+            <span x-text="theme.includes('light') ? 'Dark Mode' : 'Light Mode'"></span>
+        </button>
+    </div>
 
     <!-- CENTERED SCREEN WARNING / RESPONSE MODAL -->
     <div x-show="alertMsg" x-cloak
@@ -110,9 +183,9 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
     </div>
 
     <!-- MAIN LOGIN CARD -->
-    <div class="w-full max-w-md bg-theme-card border border-theme-border rounded-3xl shadow-2xl overflow-hidden">
+    <div class="w-full max-w-md bg-theme-card border border-theme-border rounded-3xl shadow-2xl overflow-hidden mt-10 sm:mt-0">
         <div class="p-6 sm:p-8 border-b border-theme-border text-center bg-gradient-to-b from-white/5 to-transparent">
-            <a href="<?= BASE_URL ?>/index.php" class="inline-block bg-white px-5 py-2.5 rounded-2xl shadow-md mb-4">
+            <a href="<?= BASE_URL ?>/index.php" class="inline-block bg-white px-5 py-2.5 rounded-2xl shadow-md border border-slate-200 mb-4">
                 <?php render_basa_logo('md'); ?>
             </a>
             <h1 class="text-xl font-extrabold text-theme-text">Bestlink Library & Archives</h1>
@@ -156,15 +229,15 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                     </p>
                     <div class="grid grid-cols-3 gap-2">
                         <button type="button" @click="quickFill('240103537', 'password')"
-                                class="py-2 px-2 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-extrabold text-sky-400 transition">
+                                class="py-2 px-2 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-extrabold text-sky-500 transition">
                             🎓 Student
                         </button>
                         <button type="button" @click="quickFill('LIB-001', 'password')"
-                                class="py-2 px-2 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-extrabold text-emerald-400 transition">
+                                class="py-2 px-2 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-extrabold text-emerald-500 transition">
                             📚 Librarian
                         </button>
                         <button type="button" @click="quickFill('ADMIN-001', 'password')"
-                                class="py-2 px-2 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-extrabold text-amber-400 transition">
+                                class="py-2 px-2 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-[11px] font-extrabold text-amber-500 transition">
                             🛡️ Super Admin
                         </button>
                     </div>
@@ -233,7 +306,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                             </button>
                         </div>
 
-                        <div x-show="fp.demo_otp" class="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 font-mono text-[11px]">
+                        <div x-show="fp.demo_otp" class="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 font-mono text-[11px]">
                             🧪 <strong>Sandbox OTP:</strong> <span class="font-extrabold underline" x-text="fp.demo_otp"></span>
                         </div>
 
@@ -260,6 +333,7 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
     <script>
     function loginPortalApp(initialNotice = '') {
         return {
+            theme: localStorage.getItem('basa_theme') || 'bestlink-dark',
             identifier: '',
             password: '',
             loading: false,
@@ -277,8 +351,13 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
                 demo_otp: ''
             },
 
+            toggleDarkLight() {
+                this.theme = this.theme.includes('light') ? 'bestlink-dark' : 'bestlink-light';
+                localStorage.setItem('basa_theme', this.theme);
+                document.documentElement.setAttribute('data-theme', this.theme);
+            },
+
             showAlert(msg, ok = false) {
-                // Immediately blur any focused input so pressing Enter won't re-submit the form
                 if (document.activeElement) {
                     document.activeElement.blur();
                 }
@@ -302,7 +381,6 @@ $timeout_notice = isset($_GET['timeout']) ? 'Your session expired due to inactiv
             },
 
             async submitLogin() {
-                // Prevent duplicate submission if modal is already open or request is in flight
                 if (this.loading || this.alertMsg) return;
                 this.loading = true;
 

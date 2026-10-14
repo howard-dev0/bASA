@@ -21,7 +21,7 @@ $stmt_active = $pdo->prepare("
 $stmt_active->execute([$user_id]);
 $active_loans = $stmt_active->fetchAll();
 
-// Fetch Returned Loan History
+// Fetch Returned / Damaged Loan History
 $stmt_history = $pdo->prepare("
     SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount, bt.fine_status, bt.status,
            ia.accession_no, ia.placement_code,
@@ -29,7 +29,7 @@ $stmt_history = $pdo->prepare("
     FROM borrow_transactions bt
     JOIN item_accessions ia ON bt.accession_id = ia.id
     JOIN catalog_items ci ON ia.catalog_id = ci.id
-    WHERE bt.borrower_id = ? AND bt.status = 'returned'
+    WHERE bt.borrower_id = ? AND bt.status IN ('returned', 'damaged')
     ORDER BY bt.returned_at DESC
     LIMIT 15
 ");
@@ -111,7 +111,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                 </td>
                                 <td class="py-4 px-5">
                                     <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase <?= $is_overdue ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400' ?>">
-                                        <?= $is_overdue ? 'OVERDUE' : 'ACTIVE' ?>
+                                        <?= $is_overdue ? 'OVERDUE' : 'BORROWED' ?>
                                     </span>
                                 </td>
                                 <td class="py-4 px-5 text-right">
@@ -142,17 +142,29 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </div>
         <?php else: ?>
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs min-w-[600px]">
+                <table class="w-full text-left text-xs min-w-[640px]">
                     <thead>
                         <tr class="bg-theme-main text-theme-muted uppercase text-[10px] tracking-wider border-b border-theme-border">
                             <th class="py-3 px-5">Literature Title</th>
                             <th class="py-3 px-5">Accession QR</th>
                             <th class="py-3 px-5">Returned Date</th>
-                            <th class="py-3 px-5">Fine Status</th>
+                            <th class="py-3 px-5">Fine</th>
+                            <th class="py-3 px-5">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-theme-border">
-                        <?php foreach ($loan_history as $hist): ?>
+                        <?php foreach ($loan_history as $hist): 
+                            $fine_amt = (float) $hist['fine_amount'];
+                            $fine_badge = match($hist['fine_status']) {
+                                'unpaid' => 'bg-red-500/20 text-red-400 border border-red-500/30',
+                                'paid'   => 'bg-emerald-500/20 text-emerald-400',
+                                'waived' => 'bg-amber-500/20 text-amber-400',
+                                default  => 'bg-theme-main text-theme-muted'
+                            };
+                            $status_badge = $hist['status'] === 'damaged'
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                : ($hist['fine_status'] === 'unpaid' ? 'bg-amber-500/20 text-amber-400' : 'bg-sky-500/20 text-sky-400');
+                        ?>
                             <tr>
                                 <td class="py-3 px-5">
                                     <p class="font-bold text-theme-text"><?= e($hist['title']) ?></p>
@@ -161,8 +173,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                 <td class="py-3 px-5 font-mono text-theme-muted"><?= e($hist['accession_no']) ?></td>
                                 <td class="py-3 px-5 font-mono text-theme-text"><?= e($hist['returned_at']) ?></td>
                                 <td class="py-3 px-5">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-sky-500/20 text-sky-400">
-                                        ₱<?= number_format((float)$hist['fine_amount'], 2) ?> (<?= e($hist['fine_status']) ?>)
+                                    <span class="px-2 py-0.5 rounded font-mono text-[10px] font-extrabold uppercase <?= $fine_badge ?>">
+                                        ₱<?= number_format($fine_amt, 2) ?><?= $fine_amt > 0 ? ' (' . e($hist['fine_status']) . ')' : '' ?>
+                                    </span>
+                                </td>
+                                <td class="py-3 px-5">
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase <?= $status_badge ?>">
+                                        <?= $hist['status'] === 'damaged' ? 'DAMAGED' : ($hist['fine_status'] === 'unpaid' ? 'UNPAID FINE' : 'RETURNED') ?>
                                     </span>
                                 </td>
                             </tr>
@@ -202,7 +219,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </button>
                 </div>
 
-                <!-- Adaptive QR Container -->
                 <div class="inline-block p-4 rounded-2xl border-4 shadow-lg transition-colors duration-300"
                      :class="qrInverted ? 'bg-[#0f172a] border-indigo-500' : 'bg-white border-emerald-500'">
                     <div id="returnQrCanvas" class="w-48 h-48 flex items-center justify-center"></div>
