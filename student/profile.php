@@ -7,11 +7,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<div x-data="profileSecurityApp()" x-init="loadProfile()" @keydown.escape.window="toastMsg = ''" class="max-w-5xl mx-auto space-y-6">
+<div x-data="profileSecurityApp()" x-init="loadProfile()" @keydown.escape.window="toastMsg = ''; closePinModal();" class="max-w-5xl mx-auto space-y-6">
 
-    <!-- CENTERED SCREEN RESPONSE MODAL -->
+    <!-- CENTERED SCREEN RESPONSE MODAL (Elevated to z-[120] to stay above the PIN lock) -->
     <div x-show="toastMsg" x-cloak
-         class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
+         class="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0 scale-95"
          x-transition:enter-end="opacity-100 scale-100"
@@ -34,11 +34,41 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="toastMsg"></p>
             </div>
 
-            <button type="button" @click="toastMsg = ''"
+            <!-- x-ref allows us to force focus here so Spacebar presses this button instead of re-submitting forms -->
+            <button type="button" @click="toastMsg = ''" x-ref="toastOkBtn"
                     :class="toastOk ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : 'bg-[#D9232A] hover:bg-red-700 text-white'"
-                    class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
+                    class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition focus:ring-4 focus:ring-opacity-50"
+                    :class="toastOk ? 'focus:ring-emerald-500' : 'focus:ring-[#D9232A]'">
                 OK, Understood
             </button>
+        </div>
+    </div>
+
+    <!-- PROFILE LOCK PIN REQUIRED MODAL -->
+    <div x-show="pinModalOpen" x-cloak
+         class="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+         x-transition>
+        <div @click.away="closePinModal()"
+             class="w-full max-w-sm bg-theme-card border-2 border-amber-500 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+            <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-500 border border-amber-500/40 mx-auto flex items-center justify-center text-2xl font-extrabold shadow-inner">
+                🔒
+            </div>
+            <div>
+                <h3 class="text-base font-extrabold text-amber-400">Profile Lock PIN Required</h3>
+                <p class="text-xs text-theme-muted mt-1">Enter your 4 to 6-digit PIN to authorize this change.</p>
+            </div>
+            <form @submit.prevent="confirmPinSubmit()" class="space-y-4">
+                <input type="password" x-model="pinInput" required minlength="4" maxlength="6" pattern="\d+" placeholder="••••" x-ref="pinModalField"
+                       class="w-full px-4 py-3 rounded-xl bg-theme-main border-2 border-amber-500/50 font-mono text-center tracking-[0.5em] text-lg font-extrabold text-theme-text outline-none focus:border-amber-400 transition">
+                <div class="flex gap-2">
+                    <button type="button" @click="closePinModal()" class="flex-1 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-muted font-bold text-xs">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg transition">Verify & Unlock</button>
+                </div>
+                
+                <p class="text-[10px] text-theme-muted pt-3 border-t border-theme-border/50">
+                    Forgot your PIN? Please contact the Administration or Library Help Desk to reset your security lock.
+                </p>
+            </form>
         </div>
     </div>
 
@@ -79,12 +109,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </div>
 
             <button type="button"
-                    @click="editingPersonal = !editingPersonal"
+                    @click="toggleEditPersonal()"
                     class="px-4 py-2.5 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-xs font-extrabold text-theme-text flex items-center gap-2 transition shrink-0">
-                <svg class="w-4 h-4 text-theme-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-                </svg>
-                <span x-text="editingPersonal ? 'Cancel Editing' : 'Edit Display Name & Contact'"></span>
+                <span x-text="editingPersonal ? 'Cancel Editing' : (profile.has_pin && !isUnlocked ? '🔒 Unlock to Edit Info' : '✏️ Edit Display Name & Contact')"></span>
             </button>
         </div>
 
@@ -94,22 +121,26 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <div>
                     <label class="flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">
                         <span>Display Name / Nickname</span>
-                        <button type="button" @click="editingPersonal = true; $nextTick(() => $refs.dispInput.focus())" class="text-theme-accent hover:underline">✏️ Edit</button>
+                        <button type="button" @click="profile.has_pin && !isUnlocked ? requirePin(()=>{}) : toggleEditPersonal()" class="text-theme-accent hover:underline">
+                            <span x-text="profile.has_pin && !isUnlocked ? '🔒 Unlock' : '✏️ Edit'"></span>
+                        </button>
                     </label>
                     <input type="text" x-ref="dispInput" x-model="profile.display_name" :readonly="!editingPersonal"
-                           :class="editingPersonal ? 'border-theme-accent ring-2 ring-theme-accent' : 'border-theme-border opacity-85 cursor-default'"
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main text-theme-text border text-xs font-bold outline-none transition">
+                           :class="editingPersonal ? 'border-theme-accent ring-2 ring-theme-accent bg-theme-main' : 'border-theme-border opacity-85 cursor-default bg-theme-card'"
+                           class="w-full px-3.5 py-2.5 rounded-xl text-theme-text border text-xs font-bold outline-none transition">
                 </div>
 
                 <div>
                     <label class="flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">
                         <span>Contact Number</span>
-                        <button type="button" @click="editingPersonal = true; $nextTick(() => $refs.contactInput.focus())" class="text-theme-accent hover:underline">✏️ Edit</button>
+                        <button type="button" @click="profile.has_pin && !isUnlocked ? requirePin(()=>{}) : toggleEditPersonal()" class="text-theme-accent hover:underline">
+                            <span x-text="profile.has_pin && !isUnlocked ? '🔒 Unlock' : '✏️ Edit'"></span>
+                        </button>
                     </label>
                     <input type="text" x-ref="contactInput" x-model="profile.contact_no" :readonly="!editingPersonal"
                            placeholder="09171234567"
-                           :class="editingPersonal ? 'border-theme-accent ring-2 ring-theme-accent' : 'border-theme-border opacity-85 cursor-default'"
-                           class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main text-theme-text border text-xs font-mono font-bold outline-none transition">
+                           :class="editingPersonal ? 'border-theme-accent ring-2 ring-theme-accent bg-theme-main' : 'border-theme-border opacity-85 cursor-default bg-theme-card'"
+                           class="w-full px-3.5 py-2.5 rounded-xl text-theme-text border text-xs font-mono font-bold outline-none transition">
                 </div>
 
                 <div>
@@ -118,7 +149,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         ✓ Save Personal Info
                     </button>
                     <div x-show="!editingPersonal" class="p-2.5 rounded-xl bg-theme-main border border-theme-border text-[11px] text-theme-muted text-center">
-                        Click <strong>✏️ Edit</strong> to update Display Name or Contact No.
+                        Click <strong>Edit</strong> to update Display Name or Contact No.
                     </div>
                 </div>
             </form>
@@ -185,10 +216,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </div>
         </div>
 
-        <!-- RIGHT 7 COLUMNS: SEPARATED CHANGE PASSWORD CARD + STANDALONE 2FA SETUP CARD -->
+        <!-- RIGHT 7 COLUMNS: SECURITY, PASSWORDS & 2FA -->
         <div class="lg:col-span-7 space-y-6">
 
-            <!-- CARD 1: CHANGE PASSWORD (Only shows Send Verification if "Forgot Password?" is clicked) -->
+            <!-- CARD 1: CHANGE PASSWORD -->
             <div class="bg-theme-card border border-theme-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-theme-border">
                     <div class="flex items-center gap-2">
@@ -199,7 +230,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         </svg>
                     </div>
 
-                    <button type="button"
+                    <button type="button" x-show="!profile.has_pin || isUnlocked || forgotMode" x-transition
                             @click="forgotMode = !forgotMode; demoOtpCode = ''"
                             class="text-xs font-extrabold text-theme-accent hover:underline shrink-0">
                         <span x-text="forgotMode ? '← I Remember My Current Password' : 'Forgot Current Password?'"></span>
@@ -212,29 +243,44 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div class="w-full">
                             <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">Current Password</label>
                             <input type="password" x-model="pwForm.current_password" required placeholder="••••••••"
-                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent transition">
+                                   :readonly="profile.has_pin && !isUnlocked"
+                                   :class="(profile.has_pin && !isUnlocked) ? 'opacity-50 cursor-not-allowed bg-theme-card border-theme-border' : 'bg-theme-main focus:border-theme-accent border-theme-border'"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border text-theme-text outline-none transition">
                         </div>
                         <div class="w-full">
                             <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">New Password</label>
                             <input type="password" x-model="pwForm.new_password" required minlength="6" placeholder="Min. 6 chars"
-                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent transition">
+                                   :readonly="profile.has_pin && !isUnlocked"
+                                   :class="(profile.has_pin && !isUnlocked) ? 'opacity-50 cursor-not-allowed bg-theme-card border-theme-border' : 'bg-theme-main focus:border-theme-accent border-theme-border'"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border text-theme-text outline-none transition">
                         </div>
                         <div class="w-full">
                             <label class="block font-extrabold uppercase text-theme-muted mb-1 whitespace-nowrap">Confirm New Password</label>
                             <input type="password" x-model="pwForm.confirm_password" required minlength="6" placeholder="Repeat password"
-                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent transition">
+                                   :readonly="profile.has_pin && !isUnlocked"
+                                   :class="(profile.has_pin && !isUnlocked) ? 'opacity-50 cursor-not-allowed bg-theme-card border-theme-border' : 'bg-theme-main focus:border-theme-accent border-theme-border'"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border text-theme-text outline-none transition">
                         </div>
                     </div>
 
                     <div class="flex flex-col sm:flex-row items-center sm:justify-between gap-3 pt-3">
-                        <button type="button" @click="forgotMode = true"
+                        <!-- Left Aligned Link -->
+                        <button type="button" @click="toggleForgotMode()"
                                 class="text-xs font-bold text-amber-400 hover:underline text-center sm:text-left">
-                            Forgot password? Send verification code instead →
+                            <span x-text="(profile.has_pin && !isUnlocked) ? '🔒 Forgot password? (Unlock Required)' : 'Forgot password? Send verification code instead →'"></span>
                         </button>
-                        <button type="submit"
-                                class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow-lg transition shrink-0">
-                            ✓ Update Password
-                        </button>
+                        
+                        <!-- Right Aligned Actions -->
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <button type="button" x-show="profile.has_pin && !isUnlocked" @click="requirePin(()=>{})"
+                                    class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg transition shrink-0">
+                                🔒 Unlock to Change Password
+                            </button>
+                            <button type="submit" x-show="!profile.has_pin || isUnlocked"
+                                    class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-extrabold text-xs shadow-lg transition shrink-0">
+                                ✓ Update Password
+                            </button>
+                        </div>
                     </div>
                 </form>
 
@@ -315,12 +361,56 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </div>
             </div>
 
-            <!-- CARD 2: SEPARATE TWO-FACTOR AUTHENTICATION (2FA) SETUP SECTION -->
+            <!-- CARD 2: PROFILE LOCK PIN SETUP -->
+            <div class="bg-theme-card border border-theme-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-theme-border">
+                    <div>
+                        <h2 class="text-base font-extrabold text-theme-text">Profile Lock PIN (Extra Security)</h2>
+                        <p class="text-xs text-theme-muted">Require a 4 to 6-digit PIN before personal info or passwords can be changed.</p>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase shrink-0"
+                          :class="profile.has_pin ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400'"
+                          x-text="profile.has_pin ? '✓ PIN Active' : 'Not Set'"></span>
+                </div>
+
+                <!-- Setup PIN Form -->
+                <form x-show="!profile.has_pin" @submit.prevent="enablePin()" class="space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-extrabold uppercase text-theme-muted mb-1">Create 4-6 Digit PIN</label>
+                            <input type="password" x-model="pinForm.new_pin" required minlength="4" maxlength="6" pattern="\d+" placeholder="••••"
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-center tracking-[0.5em] text-theme-text outline-none focus:border-theme-accent transition">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-extrabold uppercase text-theme-muted mb-1">Current Password</label>
+                            <input type="password" x-model="pinForm.password" required placeholder="Verify it's you"
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text outline-none focus:border-theme-accent transition">
+                        </div>
+                    </div>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-theme-accent text-white font-extrabold text-xs shadow transition">
+                        🔒 Enable Lock PIN
+                    </button>
+                </form>
+
+                <!-- Remove PIN Form -->
+                <form x-show="profile.has_pin" @submit.prevent="disablePin()" class="space-y-3">
+                    <p class="text-xs text-theme-muted mb-3">To disable the PIN requirement, please verify your PIN to confirm.</p>
+                    <button type="submit" 
+                            class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#D9232A] hover:bg-red-700 text-white font-extrabold text-xs shadow transition shrink-0">
+                        <span x-text="isUnlocked ? 'Remove PIN' : '🔒 Unlock & Remove PIN'"></span>
+                    </button>
+                    <p class="text-[10px] text-theme-muted mt-2 pt-2 border-t border-theme-border/50 inline-block">
+                        Forgot your PIN? Please contact the Administration or Library Help Desk to reset your security lock.
+                    </p>
+                </form>
+            </div>
+
+            <!-- CARD 3: TWO-FACTOR AUTHENTICATION (2FA) APP SETUP -->
             <div class="bg-theme-card border border-theme-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-theme-border">
                     <div>
                         <h2 class="text-base font-extrabold text-theme-text">Two-Factor Authentication (2FA) App Setup</h2>
-                        <p class="text-xs text-theme-muted">Link a 3rd-party OTP app (Google Authenticator) for password recovery & account security</p>
+                        <p class="text-xs text-theme-muted">Link a 3rd-party OTP app (Google Authenticator) for offline password recovery</p>
                     </div>
                     <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase shrink-0"
                           :class="profile.ga_enabled == 1 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
@@ -384,6 +474,15 @@ function profileSecurityApp() {
         forgotMode: false,
         toastMsg: '',
         toastOk: true,
+        
+        isUnlocked: false,
+        sessionPin: '',
+        
+        pinModalOpen: false,
+        pinInput: '',
+        pinCallback: null,
+        pinForm: { new_pin: '', password: '' },
+
         gaSetupOpen: false,
         gaSecret: '',
         gaVerifyCode: '',
@@ -405,7 +504,8 @@ function profileSecurityApp() {
             role: '',
             program_code: '',
             photo_path: '',
-            ga_enabled: 0
+            ga_enabled: 0,
+            has_pin: false
         },
 
         pwForm: {
@@ -424,6 +524,11 @@ function profileSecurityApp() {
         showToast(msg, ok = true) {
             this.toastMsg = msg;
             this.toastOk = ok;
+            // Unfocus active element to stop Spacebar re-triggers
+            if (document.activeElement) document.activeElement.blur();
+            this.$nextTick(() => {
+                if (this.$refs.toastOkBtn) this.$refs.toastOkBtn.focus();
+            });
         },
 
         async loadProfile() {
@@ -432,119 +537,263 @@ function profileSecurityApp() {
                 const data = await res.json();
                 if (data.success && data.profile) {
                     this.profile = data.profile;
+                    this.isUnlocked = !this.profile.has_pin;
                 }
             } catch (e) {
                 this.showToast('Could not load profile data.', false);
             }
         },
 
-        async uploadAvatar(event) {
+        async verifyPinAndUnlock(pin) {
+            try {
+                const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'verify_pin', pin: pin })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.sessionPin = pin;
+                    this.isUnlocked = true;
+                    this.pinModalOpen = false;
+                    this.showToast('Security Unlocked!', true);
+                    return true;
+                } else {
+                    this.showToast(data.message, false);
+                    this.pinInput = ''; // Auto clear incorrect PIN
+                    return false;
+                }
+            } catch (e) {
+                this.showToast('Error verifying PIN', false);
+                return false;
+            }
+        },
+
+        requirePin(callback) {
+            if (this.profile.has_pin && !this.isUnlocked) {
+                this.pinCallback = async (enteredPin) => {
+                    const isValid = await this.verifyPinAndUnlock(enteredPin);
+                    if (isValid) {
+                        callback(enteredPin);
+                    }
+                };
+                this.pinInput = '';
+                this.pinModalOpen = true;
+                setTimeout(() => { if(this.$refs.pinModalField) this.$refs.pinModalField.focus(); }, 150);
+            } else {
+                callback(this.sessionPin);
+            }
+        },
+
+        closePinModal() {
+            this.pinModalOpen = false;
+            this.pinInput = '';
+            this.pinCallback = null;
+        },
+
+        confirmPinSubmit() {
+            if (this.pinCallback) {
+                this.pinCallback(this.pinInput);
+            }
+            if (document.activeElement) document.activeElement.blur();
+        },
+
+        toggleEditPersonal() {
+            if (this.editingPersonal) {
+                this.editingPersonal = false;
+                return;
+            }
+            if (this.profile.has_pin && !this.isUnlocked) {
+                this.requirePin(() => {}); // Only unlock, do not enter edit mode immediately
+                return;
+            }
+            this.editingPersonal = true;
+            this.$nextTick(() => { if (this.$refs.dispInput) this.$refs.dispInput.focus(); });
+        },
+
+        toggleForgotMode() {
+            if (this.forgotMode) {
+                this.forgotMode = false;
+                this.demoOtpCode = '';
+                return;
+            }
+            this.requirePin(() => {
+                this.forgotMode = true;
+            });
+        },
+
+        uploadAvatar(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            const formData = new FormData();
-            formData.append('action', 'upload_photo');
-            formData.append('photo', file);
+            this.requirePin(async (pinCode) => {
+                const formData = new FormData();
+                formData.append('action', 'upload_photo');
+                formData.append('photo', file);
+                formData.append('profile_pin', pinCode);
 
-            try {
-                const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-                this.showToast(data.message, data.success);
-                if (data.success) {
-                    this.profile.photo_path = data.photo_path;
-                    setTimeout(() => window.location.reload(), 900);
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message, data.success);
+                    if (data.success) {
+                        this.profile.photo_path = data.photo_path;
+                        setTimeout(() => window.location.reload(), 900);
+                    }
+                } catch (e) {
+                    this.showToast('Failed to upload image.', false);
                 }
-            } catch (e) {
-                this.showToast('Failed to upload image.', false);
-            }
+            });
         },
 
-        async savePersonal() {
+        savePersonal() {
+            this.requirePin(async (pinCode) => {
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'update_personal',
+                            display_name: this.profile.display_name,
+                            contact_no: this.profile.contact_no,
+                            profile_pin: pinCode
+                        })
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message, data.success);
+                    if (data.success) {
+                        this.editingPersonal = false;
+                    }
+                } catch (e) {
+                    this.showToast('Server error while saving personal info.', false);
+                }
+            });
+        },
+
+        submitRegularPasswordChange() {
+            this.requirePin(async (pinCode) => {
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'change_password',
+                            ...this.pwForm,
+                            profile_pin: pinCode
+                        })
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message, data.success);
+                    if (data.success) {
+                        this.pwForm.current_password = '';
+                        this.pwForm.new_password = '';
+                        this.pwForm.confirm_password = '';
+                    }
+                } catch (e) {
+                    this.showToast('Error updating password.', false);
+                }
+            });
+        },
+
+        async enablePin() {
             try {
                 const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        action: 'update_personal',
-                        display_name: this.profile.display_name,
-                        contact_no: this.profile.contact_no
+                        action: 'setup_pin',
+                        ...this.pinForm
                     })
                 });
                 const data = await res.json();
                 this.showToast(data.message, data.success);
                 if (data.success) {
-                    this.editingPersonal = false;
+                    this.profile.has_pin = true;
+                    this.pinForm.new_pin = '';
+                    this.pinForm.password = '';
                 }
             } catch (e) {
-                this.showToast('Server error while saving personal info.', false);
+                this.showToast('Error enabling PIN.', false);
             }
         },
 
-        async submitRegularPasswordChange() {
-            try {
-                const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'change_password',
-                        ...this.pwForm
-                    })
-                });
-                const data = await res.json();
-                this.showToast(data.message, data.success);
-                if (data.success) {
-                    this.pwForm.current_password = '';
-                    this.pwForm.new_password = '';
-                    this.pwForm.confirm_password = '';
+        disablePin() {
+            this.requirePin(async (pinCode) => {
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'remove_pin',
+                            profile_pin: pinCode
+                        })
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message, data.success);
+                    if (data.success) {
+                        this.profile.has_pin = false;
+                        this.isUnlocked = true;
+                        this.sessionPin = '';
+                        this.pinForm.password = '';
+                    }
+                } catch (e) {
+                    this.showToast('Error removing PIN.', false);
                 }
-            } catch (e) {
-                this.showToast('Error updating password.', false);
-            }
+            });
         },
 
         async sendOtpCode() {
-            try {
-                const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'send_otp', channel: this.forgotForm.auth_method })
-                });
-                const data = await res.json();
-                this.showToast(data.message, data.success);
-                if (data.success && data.demo_otp) {
-                    this.demoOtpCode = data.demo_otp;
-                    this.forgotForm.otp_code = data.demo_otp;
+            this.requirePin(async (pinCode) => {
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            action: 'send_otp', 
+                            channel: this.forgotForm.auth_method,
+                            profile_pin: pinCode
+                        })
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message, data.success);
+                    if (data.success && data.demo_otp) {
+                        this.demoOtpCode = data.demo_otp;
+                        this.forgotForm.otp_code = data.demo_otp;
+                    }
+                } catch (e) {
+                    this.showToast('Error sending verification code.', false);
                 }
-            } catch (e) {
-                this.showToast('Error sending verification code.', false);
-            }
+            });
         },
 
         async submitForgotPasswordReset() {
-            try {
-                const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'reset_forgot_password',
-                        ...this.forgotForm
-                    })
-                });
-                const data = await res.json();
-                this.showToast(data.message, data.success);
-                if (data.success) {
-                    this.forgotForm.otp_code = '';
-                    this.forgotForm.new_password = '';
-                    this.forgotForm.confirm_password = '';
-                    this.demoOtpCode = '';
-                    this.forgotMode = false;
+            this.requirePin(async (pinCode) => {
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'reset_forgot_password',
+                            ...this.forgotForm,
+                            profile_pin: pinCode
+                        })
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message, data.success);
+                    if (data.success) {
+                        this.forgotForm.otp_code = '';
+                        this.forgotForm.new_password = '';
+                        this.forgotForm.confirm_password = '';
+                        this.demoOtpCode = '';
+                        this.forgotMode = false;
+                    }
+                } catch (e) {
+                    this.showToast('Error resetting password.', false);
                 }
-            } catch (e) {
-                this.showToast('Error resetting password.', false);
-            }
+            });
         },
 
         toggleGaQrInvert() {

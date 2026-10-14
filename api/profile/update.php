@@ -10,8 +10,24 @@ require_role(['student', 'faculty', 'librarian', 'super_admin']);
 
 $user_id = (int) $_SESSION['user_id'];
 
+// Global helper to verify PIN if the user has one enabled
+function verify_profile_pin($pdo, $user_id, $provided_pin) {
+    $stmt = $pdo->prepare("SELECT profile_pin FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $pin_hash = $stmt->fetchColumn();
+
+    if (!empty($pin_hash)) {
+        if (empty($provided_pin) || !password_verify($provided_pin, $pin_hash)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Profile Lock PIN. Security change blocked.']);
+            exit();
+        }
+    }
+}
+
 // Handle multipart/form-data for Profile Photo Upload
 if (isset($_POST['action']) && $_POST['action'] === 'upload_photo') {
+    verify_profile_pin($pdo, $user_id, $_POST['profile_pin'] ?? '');
+
     if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
         echo json_encode(['success' => false, 'message' => 'Please select a valid image file (JPG, PNG, or WEBP).']);
         exit();
@@ -26,11 +42,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'upload_photo') {
 
     $finfo = new \finfo(FILEINFO_MIME_TYPE);
     $mime  = $finfo->file($file['tmp_name']);
-    $allowed_mimes = [
-        'image/jpeg' => 'jpg',
-        'image/png'  => 'png',
-        'image/webp' => 'webp'
-    ];
+    $allowed_mimes = ['image/jpeg' => 'jpg', 'image/png'  => 'png', 'image/webp' => 'webp'];
 
     if (!isset($allowed_mimes[$mime])) {
         echo json_encode(['success' => false, 'message' => 'Only JPG, PNG, and WEBP images are allowed.']);
@@ -69,12 +81,32 @@ if (isset($_POST['action']) && $_POST['action'] === 'upload_photo') {
 $input  = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $input['action'] ?? ($_GET['action'] ?? 'get_profile');
 
+// 0. VERIFY PIN ENDPOINT (For unlocking UI smoothly)
+if ($action === 'verify_pin') {
+    $pin = trim($input['pin'] ?? '');
+    $stmt = $pdo->prepare("SELECT profile_pin FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $pin_hash = $stmt->fetchColumn();
+
+    if (empty($pin_hash)) {
+        echo json_encode(['success' => true, 'message' => 'No PIN set.']);
+        exit();
+    }
+
+    if (password_verify($pin, $pin_hash)) {
+        echo json_encode(['success' => true, 'message' => 'Security Unlocked!']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Invalid Profile Lock PIN.']);
+    }
+    exit();
+}
+
 // 1. FETCH CURRENT USER PROFILE DATA
 if ($action === 'get_profile') {
     $stmt = $pdo->prepare("
         SELECT id, school_id, first_name, middle_name, middle_initial, last_name, suffix,
                full_name, display_name, email, contact_no, role, program_code, photo_path,
-               ga_enabled, created_at
+               ga_enabled, profile_pin, created_at
         FROM users
         WHERE id = ? LIMIT 1
     ");
@@ -87,12 +119,17 @@ if ($action === 'get_profile') {
         $profile['last_name']  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
     }
 
+    $profile['has_pin'] = !empty($profile['profile_pin']);
+    unset($profile['profile_pin']); // Never expose hash to frontend
+
     echo json_encode(['success' => true, 'profile' => $profile]);
     exit();
 }
 
-// 2. UPDATE STUDENT-EDITABLE FIELDS (Display Name & Contact No. ONLY)
+// 2. UPDATE STUDENT-EDITABLE FIELDS
 if ($action === 'update_personal') {
+    verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+
     $display_name = trim($input['display_name'] ?? '');
     $contact_no   = trim($input['contact_no'] ?? '');
 
@@ -113,14 +150,50 @@ if ($action === 'update_personal') {
 
     log_action($pdo, $user_id, 'PROFILE_UPDATE', "Updated Display Name to '{$display_name}' and Contact No. to '{$contact_no}'.");
 
-    echo json_encode([
-        'success' => true,
-        'message' => 'Display Name and Contact Number updated!'
-    ]);
+    echo json_encode(['success' => true, 'message' => 'Display Name and Contact Number updated!']);
     exit();
 }
 
-// 3. INITIALIZE 1ST-TIME GOOGLE AUTHENTICATOR SETUP (Standalone 2FA Card)
+// 3. SET UP / ENABLE PROFILE LOCK PIN
+if ($action === 'setup_pin') {
+    $password = trim($input['password'] ?? '');
+    $new_pin  = trim($input['new_pin'] ?? '');
+
+    if (!preg_match('/^\d{4,6}$/', $new_pin)) {
+        echo json_encode(['success' => false, 'message' => 'PIN must be a 4 to 6-digit number.']);
+        exit();
+    }
+
+    $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $hash = $stmt->fetchColumn();
+
+    if (!$hash || !password_verify($password, $hash)) {
+        echo json_encode(['success' => false, 'message' => 'Incorrect current password.']);
+        exit();
+    }
+
+    $pin_hash = password_hash($new_pin, PASSWORD_DEFAULT);
+    $pdo->prepare("UPDATE users SET profile_pin = ? WHERE id = ?")->execute([$pin_hash, $user_id]);
+
+    log_action($pdo, $user_id, 'PROFILE_PIN_ENABLED', 'Enabled Profile Lock PIN.');
+    echo json_encode(['success' => true, 'message' => 'Profile Lock PIN enabled! Your personal info is now protected.']);
+    exit();
+}
+
+// 4. REMOVE / DISABLE PROFILE LOCK PIN
+if ($action === 'remove_pin') {
+    // Rely strictly on the PIN itself to authorize its own removal
+    verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+
+    $pdo->prepare("UPDATE users SET profile_pin = NULL WHERE id = ?")->execute([$user_id]);
+
+    log_action($pdo, $user_id, 'PROFILE_PIN_DISABLED', 'Removed Profile Lock PIN.');
+    echo json_encode(['success' => true, 'message' => 'Profile Lock PIN has been successfully removed.']);
+    exit();
+}
+
+// 5. INITIALIZE 1ST-TIME GOOGLE AUTHENTICATOR SETUP
 if ($action === 'init_ga_setup') {
     $stmt = $pdo->prepare("SELECT school_id, email, ga_secret, ga_enabled FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$user_id]);
@@ -137,15 +210,11 @@ if ($action === 'init_ga_setup') {
     $account = rawurlencode($u['school_id']);
     $otpauth = "otpauth://totp/{$issuer}:{$account}?secret={$secret}&issuer={$issuer}&algorithm=SHA1&digits=6&period=30";
 
-    echo json_encode([
-        'success'     => true,
-        'secret'      => $secret,
-        'otpauth_uri' => $otpauth
-    ]);
+    echo json_encode(['success' => true, 'secret' => $secret, 'otpauth_uri' => $otpauth]);
     exit();
 }
 
-// 4. VERIFY & ACTIVATE GOOGLE AUTHENTICATOR (Standalone 2FA Card)
+// 6. VERIFY & ACTIVATE GOOGLE AUTHENTICATOR
 if ($action === 'verify_ga_setup') {
     $code = trim($input['code'] ?? '');
 
@@ -166,15 +235,14 @@ if ($action === 'verify_ga_setup') {
     $pdo->prepare("UPDATE users SET ga_enabled = 1 WHERE id = ?")->execute([$user_id]);
     log_action($pdo, $user_id, '2FA_GA_ENABLED', 'Enabled Google Authenticator 3rd-party 2FA.');
 
-    echo json_encode([
-        'success' => true,
-        'message' => 'Google Authenticator 2FA is now linked to your account!'
-    ]);
+    echo json_encode(['success' => true, 'message' => 'Google Authenticator 2FA is now linked to your account!']);
     exit();
 }
 
-// 5. STANDARD CHANGE PASSWORD (When user knows their Current Password — NO OTP needed)
+// 7. STANDARD CHANGE PASSWORD
 if ($action === 'change_password') {
+    verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+
     $current_password = $input['current_password'] ?? '';
     $new_password     = $input['new_password'] ?? '';
     $confirm_password = $input['confirm_password'] ?? '';
@@ -199,7 +267,7 @@ if ($action === 'change_password') {
     $u = $stmt->fetch();
 
     if (!$u || !password_verify($current_password, $u['password_hash'])) {
-        echo json_encode(['success' => false, 'message' => 'Invalid Current Password! If you forgot your password, click "Forgot Password?" below to verify via Email, SMS, or Authenticator.']);
+        echo json_encode(['success' => false, 'message' => 'Invalid Current Password!']);
         exit();
     }
 
@@ -208,15 +276,14 @@ if ($action === 'change_password') {
 
     log_action($pdo, $user_id, 'PASSWORD_CHANGE', 'Changed account password using current password.');
 
-    echo json_encode([
-        'success' => true,
-        'message' => 'Your password has been changed successfully!'
-    ]);
+    echo json_encode(['success' => true, 'message' => 'Your password has been changed successfully!']);
     exit();
 }
 
-// 6. SEND EMAIL OTP OR SMS OTP (Only shown when user clicks "Forgot Password?")
+// 8. SEND EMAIL OTP OR SMS OTP
 if ($action === 'send_otp') {
+    verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+
     $channel = trim($input['channel'] ?? 'email');
     if (!in_array($channel, ['email', 'sms'], true)) {
         echo json_encode(['success' => false, 'message' => 'Invalid verification channel.']);
@@ -228,7 +295,7 @@ if ($action === 'send_otp') {
     $u = $stmt->fetch();
 
     if ($channel === 'sms' && empty($u['contact_no'])) {
-        echo json_encode(['success' => false, 'message' => 'Please save a Contact Number on your profile first before requesting an SMS verification code.']);
+        echo json_encode(['success' => false, 'message' => 'Please save a Contact Number on your profile first before requesting an SMS.']);
         exit();
     }
 
@@ -258,11 +325,13 @@ if ($action === 'send_otp') {
     exit();
 }
 
-// 7. RESET FORGOTTEN PASSWORD USING VERIFICATION CODE (Email API, SMS API, or Google Authenticator)
+// 9. RESET FORGOTTEN PASSWORD USING VERIFICATION CODE
 if ($action === 'reset_forgot_password') {
+    verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+
     $new_password     = $input['new_password'] ?? '';
     $confirm_password = $input['confirm_password'] ?? '';
-    $auth_method      = trim($input['auth_method'] ?? 'email'); // 'email', 'sms', 'ga'
+    $auth_method      = trim($input['auth_method'] ?? 'email'); 
     $otp_input        = trim($input['otp_code'] ?? '');
 
     if ($new_password === '' || strlen($new_password) < 6) {
@@ -281,7 +350,7 @@ if ($action === 'reset_forgot_password') {
 
     if ($auth_method === 'ga') {
         if ((int)$u['ga_enabled'] !== 1 || empty($u['ga_secret'])) {
-            echo json_encode(['success' => false, 'message' => 'Google Authenticator is not linked on your account yet. Please choose Email OTP or SMS OTP, or set up Authenticator in the 2FA section below.']);
+            echo json_encode(['success' => false, 'message' => 'Google Authenticator is not linked on your account yet.']);
             exit();
         }
         if (!verify_ga_totp($u['ga_secret'], $otp_input)) {
@@ -312,10 +381,7 @@ if ($action === 'reset_forgot_password') {
 
     log_action($pdo, $user_id, 'PASSWORD_RESET_OTP', "Reset forgotten password verified via " . strtoupper($auth_method) . ".");
 
-    echo json_encode([
-        'success' => true,
-        'message' => 'Password reset successfully via ' . strtoupper($auth_method) . ' verification!'
-    ]);
+    echo json_encode(['success' => true, 'message' => 'Password reset successfully via ' . strtoupper($auth_method) . ' verification!']);
     exit();
 }
 
