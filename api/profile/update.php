@@ -183,7 +183,6 @@ if ($action === 'setup_pin') {
 
 // 4. REMOVE / DISABLE PROFILE LOCK PIN
 if ($action === 'remove_pin') {
-    // Rely strictly on the PIN itself to authorize its own removal
     verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
 
     $pdo->prepare("UPDATE users SET profile_pin = NULL WHERE id = ?")->execute([$user_id]);
@@ -195,6 +194,8 @@ if ($action === 'remove_pin') {
 
 // 5. INITIALIZE 1ST-TIME GOOGLE AUTHENTICATOR SETUP
 if ($action === 'init_ga_setup') {
+    verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+
     $stmt = $pdo->prepare("SELECT school_id, email, ga_secret, ga_enabled FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$user_id]);
     $u = $stmt->fetch();
@@ -216,6 +217,8 @@ if ($action === 'init_ga_setup') {
 
 // 6. VERIFY & ACTIVATE GOOGLE AUTHENTICATOR
 if ($action === 'verify_ga_setup') {
+    verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
+    
     $code = trim($input['code'] ?? '');
 
     $stmt = $pdo->prepare("SELECT ga_secret FROM users WHERE id = ? LIMIT 1");

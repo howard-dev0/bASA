@@ -9,7 +9,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 <div x-data="profileSecurityApp()" x-init="loadProfile()" @keydown.escape.window="toastMsg = ''; closePinModal();" class="max-w-5xl mx-auto space-y-6">
 
-    <!-- CENTERED SCREEN RESPONSE MODAL (Elevated to z-[120] to stay above the PIN lock) -->
+    <!-- CENTERED SCREEN RESPONSE MODAL -->
     <div x-show="toastMsg" x-cloak
          class="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4"
          x-transition:enter="transition ease-out duration-200"
@@ -34,7 +34,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <p class="text-xs sm:text-sm text-theme-text font-semibold mt-1.5 leading-relaxed" x-text="toastMsg"></p>
             </div>
 
-            <!-- x-ref allows us to force focus here so Spacebar presses this button instead of re-submitting forms -->
             <button type="button" @click="toastMsg = ''" x-ref="toastOkBtn"
                     :class="toastOk ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : 'bg-[#D9232A] hover:bg-red-700 text-white'"
                     class="w-full py-2.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition focus:ring-4 focus:ring-opacity-50"
@@ -70,6 +69,24 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </p>
             </form>
         </div>
+    </div>
+
+    <!-- 🔓 SECURITY UNLOCKED BANNER (Appears only when PIN is verified) -->
+    <div x-show="profile.has_pin && isUnlocked" x-cloak x-transition
+         class="bg-amber-500/10 border border-amber-500/40 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center text-xl shrink-0 shadow-inner">
+                🔓
+            </div>
+            <div>
+                <h3 class="text-sm font-extrabold text-amber-400">Security Temporarily Unlocked</h3>
+                <p class="text-xs text-theme-muted mt-0.5">Your profile lock is bypassed. You can now edit your details, passwords, and 2FA settings.</p>
+            </div>
+        </div>
+        <button @click="lockProfile()" type="button"
+                class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg transition shrink-0 flex justify-center items-center gap-2">
+            🔒 Lock Now
+        </button>
     </div>
 
     <!-- TOP PROFILE CARD: AVATAR UPLOAD + EDITABLE DISPLAY NAME & CONTACT NO. -->
@@ -423,7 +440,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </p>
                     <button type="button" @click="startGaSetup()"
                             class="px-4 py-2.5 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border font-extrabold text-theme-text shrink-0 transition">
-                        <span x-text="profile.ga_enabled == 1 ? '↻ Re-Configure 2FA QR' : '⚡ Setup First-Time 2FA'"></span>
+                        <span x-text="(profile.has_pin && !isUnlocked) ? '🔒 Unlock to Configure 2FA' : (profile.ga_enabled == 1 ? '↻ Re-Configure 2FA QR' : '⚡ Setup First-Time 2FA')"></span>
                     </button>
                 </div>
 
@@ -519,6 +536,15 @@ function profileSecurityApp() {
             otp_code: '',
             new_password: '',
             confirm_password: ''
+        },
+
+        lockProfile() {
+            this.isUnlocked = false;
+            this.sessionPin = '';
+            this.editingPersonal = false;
+            this.forgotMode = false;
+            this.gaSetupOpen = false;
+            this.showToast('Security Session Locked.', true);
         },
 
         showToast(msg, ok = true) {
@@ -820,42 +846,48 @@ function profileSecurityApp() {
         },
 
         async startGaSetup() {
-            try {
-                const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'init_ga_setup', regenerate: true })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    this.gaSecret = data.secret;
-                    this.gaSetupOpen = true;
-                    this.$nextTick(() => {
-                        this.renderGaQr(data.otpauth_uri);
+            this.requirePin(async (pinCode) => {
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'init_ga_setup', regenerate: true, profile_pin: pinCode })
                     });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.gaSecret = data.secret;
+                        this.gaSetupOpen = true;
+                        this.$nextTick(() => {
+                            this.renderGaQr(data.otpauth_uri);
+                        });
+                    } else {
+                        this.showToast(data.message, false);
+                    }
+                } catch (e) {
+                    this.showToast('Could not initialize 2FA setup.', false);
                 }
-            } catch (e) {
-                this.showToast('Could not initialize 2FA setup.', false);
-            }
+            });
         },
 
         async confirmGaSetup() {
-            try {
-                const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'verify_ga_setup', code: this.gaVerifyCode })
-                });
-                const data = await res.json();
-                this.showToast(data.message, data.success);
-                if (data.success) {
-                    this.profile.ga_enabled = 1;
-                    this.gaSetupOpen = false;
-                    this.gaVerifyCode = '';
+            this.requirePin(async (pinCode) => {
+                try {
+                    const res = await fetch('<?= BASE_URL ?>/api/profile/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'verify_ga_setup', code: this.gaVerifyCode, profile_pin: pinCode })
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message, data.success);
+                    if (data.success) {
+                        this.profile.ga_enabled = 1;
+                        this.gaSetupOpen = false;
+                        this.gaVerifyCode = '';
+                    }
+                } catch (e) {
+                    this.showToast('Error verifying Authenticator code.', false);
                 }
-            } catch (e) {
-                this.showToast('Error verifying Authenticator code.', false);
-            }
+            });
         }
     };
 }
