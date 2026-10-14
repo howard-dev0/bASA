@@ -6,27 +6,31 @@ require_once __DIR__ . '/../../includes/functions.php';
 
 $pdo = $GLOBALS['pdo'];
 
-// Rate Limit Check for Public OTP Verification
-function check_public_otp_lockout() {
-    if (isset($_SESSION['public_otp_lockout']) && time() < $_SESSION['public_otp_lockout']) {
-        $left = $_SESSION['public_otp_lockout'] - time();
+$input      = json_decode(file_get_contents('php://input'), true) ?? [];
+$action     = $input['action'] ?? '';
+$identifier = trim($input['identifier'] ?? '');
+
+function check_user_db_lockout(array $user): void {
+    if (!empty($user['security_lockout_until']) && strtotime($user['security_lockout_until']) > time()) {
+        $left = strtotime($user['security_lockout_until']) - time();
         echo json_encode(['success' => false, 'message' => "Too many invalid attempts. Try again in {$left} seconds."]);
         exit();
     }
 }
 
-function handle_public_otp_failure($msg) {
-    $_SESSION['public_otp_attempts'] = ($_SESSION['public_otp_attempts'] ?? 0) + 1;
-    if ($_SESSION['public_otp_attempts'] >= 5) {
-        $_SESSION['public_otp_lockout'] = time() + 300;
-    }
+function record_user_db_failure(object $pdo, array $user, string $msg): void {
+    $attempts = (int) ($user['security_attempts'] ?? 0) + 1;
+    $lockout  = ($attempts >= 5) ? date('Y-m-d H:i:s', time() + 300) : null;
+    $pdo->prepare("UPDATE users SET security_attempts = ?, security_lockout_until = ? WHERE id = ?")
+        ->execute([$attempts, $lockout, $user['id']]);
     echo json_encode(['success' => false, 'message' => $msg]);
     exit();
 }
 
-$input      = json_decode(file_get_contents('php://input'), true) ?? [];
-$action     = $input['action'] ?? '';
-$identifier = trim($input['identifier'] ?? '');
+function clear_user_db_failures(object $pdo, int $user_id): void {
+    $pdo->prepare("UPDATE users SET security_attempts = 0, security_lockout_until = NULL WHERE id = ?")
+        ->execute([$user_id]);
+}
 
 function mask_email(string $email): string {
     $parts = explode('@', $email);
@@ -49,7 +53,8 @@ if ($identifier === '') {
 }
 
 $stmt = $pdo->prepare("
-    SELECT id, school_id, full_name, email, contact_no, ga_secret, ga_enabled, otp_code, otp_expires_at, otp_channel
+    SELECT id, school_id, full_name, email, contact_no, ga_secret, ga_enabled,
+           otp_code, otp_expires_at, otp_channel, security_attempts, security_lockout_until
     FROM users
     WHERE school_id = :id OR email = :email
     LIMIT 1
@@ -76,8 +81,10 @@ if ($action === 'find_account') {
     exit();
 }
 
-// 2. SEND OTP FOR FORGOTTEN PASSWORD
+// 2. SEND OTP FOR FORGOTTEN PASSWORD (VIA MAILERSEND API OR SMS)
 if ($action === 'send_otp') {
+    check_user_db_lockout($user);
+
     $channel = trim($input['channel'] ?? 'email');
     if (!in_array($channel, ['email', 'sms'], true)) {
         echo json_encode(['success' => false, 'message' => 'Invalid verification channel.']);
@@ -95,55 +102,73 @@ if ($action === 'send_otp') {
     $pdo->prepare("UPDATE users SET otp_code = ?, otp_expires_at = ?, otp_channel = ? WHERE id = ?")
         ->execute([$otp_code, $expires_at, $channel, $user['id']]);
 
-    $dest = ($channel === 'email') ? $user['email'] : $user['contact_no'];
+    $dev_mode = is_dev_mode($pdo);
+    $api_status_note = '';
+
     if ($channel === 'email') {
-        @mail($user['email'], "bASA Password Reset Code: {$otp_code}", "Your 6-digit password reset code is: {$otp_code}", "From: noreply@bcp.edu.ph");
+        $mail_res = send_basa_otp_email($user['email'], $user['full_name'], $user['school_id'], $otp_code);
+        if ($mail_res['success']) {
+            $api_status_note = ' (Delivered via MailerSend API)';
+        } else {
+            if (!$dev_mode) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'MailerSend API Notice: ' . $mail_res['error']
+                ]);
+                exit();
+            }
+            $api_status_note = ' (MailerSend Trial Note: ' . $mail_res['error'] . ')';
+        }
     }
 
-    log_action($pdo, (int)$user['id'], 'LOGIN_FORGOT_OTP', "Dispatched password recovery OTP via " . strtoupper($channel) . " for #{$user['school_id']}.");
+    log_action($pdo, (int)$user['id'], 'LOGIN_FORGOT_OTP', "Dispatched password recovery OTP via " . strtoupper($channel) . " for #{$user['school_id']}{$api_status_note}.");
 
     echo json_encode([
         'success'  => true,
-        'demo_otp' => $otp_code,
-        'message'  => "6-digit verification code sent via " . strtoupper($channel) . " API!"
+        'demo_otp' => $dev_mode ? $otp_code : null,
+        'message'  => "6-digit verification code sent via " . strtoupper($channel) . "!" . $api_status_note
     ]);
     exit();
 }
 
 // 3. VERIFY OTP & RESET PASSWORD
 if ($action === 'reset_password') {
-    check_public_otp_lockout();
+    check_user_db_lockout($user);
 
     $auth_method      = trim($input['auth_method'] ?? 'email');
     $otp_input        = trim($input['otp_code'] ?? '');
     $new_password     = $input['new_password'] ?? '';
     $confirm_password = $input['confirm_password'] ?? '';
 
-    if (strlen($new_password) < 6 || $new_password !== $confirm_password) {
-        echo json_encode(['success' => false, 'message' => 'Passwords must match and be at least 6 chars.']);
+    if (strlen($new_password) < 6) {
+        echo json_encode(['success' => false, 'message' => 'New password must be at least 6 characters long.']);
+        exit();
+    }
+    if ($new_password !== $confirm_password) {
+        echo json_encode(['success' => false, 'message' => 'New password and confirmation do not match.']);
         exit();
     }
 
     if ($auth_method === 'ga') {
         if ((int)$user['ga_enabled'] !== 1 || empty($user['ga_secret'])) {
-            handle_public_otp_failure('Google Authenticator is not set up on this account. Please use Email or SMS verification.');
+            record_user_db_failure($pdo, $user, 'Google Authenticator is not set up on this account. Please use Email or SMS verification.');
         }
         if (!verify_ga_totp($user['ga_secret'], $otp_input)) {
-            handle_public_otp_failure('Invalid 6-digit Google Authenticator code!');
+            record_user_db_failure($pdo, $user, 'Invalid 6-digit Google Authenticator code!');
         }
     } else {
         if (empty($user['otp_code']) || $user['otp_channel'] !== $auth_method) {
-            handle_public_otp_failure('Please request a verification code first.');
+            record_user_db_failure($pdo, $user, 'Please request a verification code first.');
         }
         if (strtotime($user['otp_expires_at']) < time()) {
-            handle_public_otp_failure('Verification code has expired.');
+            record_user_db_failure($pdo, $user, 'Verification code has expired.');
         }
         if (!hash_equals((string)$user['otp_code'], $otp_input)) {
-            handle_public_otp_failure('Invalid 6-digit verification code!');
+            record_user_db_failure($pdo, $user, 'Invalid 6-digit verification code!');
         }
     }
 
-    unset($_SESSION['public_otp_attempts'], $_SESSION['public_otp_lockout']);
+    clear_user_db_failures($pdo, (int)$user['id']);
 
     $hash = password_hash($new_password, PASSWORD_DEFAULT);
     $pdo->prepare("UPDATE users SET password_hash = ?, otp_code = NULL, otp_expires_at = NULL WHERE id = ?")

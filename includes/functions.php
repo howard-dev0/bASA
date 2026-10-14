@@ -145,3 +145,96 @@ function verify_ga_totp(string $base32_secret, string $code, int $discrepancy = 
     }
     return false;
 }
+
+// =========================================================================
+// MAILERSEND REST API EMAIL DISPATCHER
+// =========================================================================
+function send_mailersend_email(string $to_email, string $to_name, string $subject, string $text_body, string $html_body = ''): array {
+    if (!function_exists('curl_init')) {
+        return ['success' => false, 'http_code' => 0, 'error' => 'PHP cURL extension is not enabled.'];
+    }
+
+    $payload = [
+        'from' => [
+            'email' => MAILERSEND_FROM_EMAIL,
+            'name'  => MAILERSEND_FROM_NAME
+        ],
+        'to' => [
+            [
+                'email' => trim($to_email),
+                'name'  => trim($to_name) !== '' ? trim($to_name) : 'BCP Library User'
+            ]
+        ],
+        'subject' => $subject,
+        'text'    => $text_body,
+        'html'    => $html_body !== '' ? $html_body : nl2br(e($text_body))
+    ];
+
+    $ch = curl_init('https://api.mailersend.com/v1/email');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'X-Requested-With: XMLHttpRequest',
+            'Authorization: Bearer ' . MAILERSEND_API_TOKEN
+        ],
+        CURLOPT_POSTFIELDS     => json_encode($payload),
+        CURLOPT_TIMEOUT        => 12,
+        // Avoid local XAMPP SSL CA bundle issues on Windows
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0
+    ]);
+
+    $response  = curl_exec($ch);
+    $http_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_err  = curl_error($ch);
+    curl_close($ch);
+
+    // MailerSend returns 202 Accepted when queued for delivery
+    if ($http_code >= 200 && $http_code < 300) {
+        return ['success' => true, 'http_code' => $http_code, 'error' => null];
+    }
+
+    $api_msg = $curl_err;
+    if ($response) {
+        $decoded = json_decode($response, true);
+        if (!empty($decoded['message'])) {
+            $api_msg = $decoded['message'];
+        }
+    }
+
+    return [
+        'success'   => false,
+        'http_code' => $http_code,
+        'error'     => $api_msg ?: "HTTP {$http_code}"
+    ];
+}
+
+function send_basa_otp_email(string $to_email, string $to_name, string $school_id, string $otp_code): array {
+    $subject = "bASA Library Password Reset OTP: {$otp_code} 📬";
+    $text    = "Hello {$to_name} (#{$school_id}),\n\nYour 6-digit bASA Library password reset verification code is: {$otp_code}\n\nThis code is valid for 5 minutes. If you did not request this, please ignore this email.";
+
+    $safe_name = e($to_name);
+    $safe_id   = e($school_id);
+    $safe_otp  = e($otp_code);
+
+    $html = "
+    <div style='font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f172a; color: #f8fafc; padding: 28px; border-radius: 16px; border: 1px solid #334155;'>
+        <div style='border-bottom: 1px solid #334155; padding-bottom: 14px; margin-bottom: 20px;'>
+            <span style='background: #0089d0; color: #ffffff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 99px; text-transform: uppercase;'>bASA • Bestlink Library & Archives</span>
+            <h2 style='margin: 12px 0 4px 0; color: #ffffff; font-size: 20px;'>Password Recovery Verification</h2>
+            <p style='margin: 0; color: #94a3b8; font-size: 12px;'>Account ID: #{$safe_id}</p>
+        </div>
+        <p style='font-size: 14px; color: #e2e8f0; line-height: 1.6;'>Hello <strong>{$safe_name}</strong>,</p>
+        <p style='font-size: 13px; color: #cbd5e1; line-height: 1.6;'>Use the 6-digit verification code below to reset your bASA Library account password. This code expires in <strong>5 minutes</strong>:</p>
+        <div style='background: #1e293b; border: 2px dashed #0089d0; border-radius: 12px; padding: 18px; text-align: center; margin: 22px 0;'>
+            <span style='font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #38bdf8;'>{$safe_otp}</span>
+        </div>
+        <p style='font-size: 11px; color: #64748b; margin-top: 20px; border-top: 1px solid #1e293b; padding-top: 12px;'>
+            Sent via MailerSend API • Bestlink College of the Philippines Library & Archives
+        </p>
+    </div>";
+
+    return send_mailersend_email($to_email, $to_name, $subject, $text, $html);
+}

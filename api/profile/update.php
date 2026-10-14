@@ -155,7 +155,7 @@ if ($action === 'get_profile') {
     }
 
     $profile['has_pin'] = !empty($profile['profile_pin']);
-    unset($profile['profile_pin']); // Never expose hash to frontend
+    unset($profile['profile_pin']);
 
     echo json_encode(['success' => true, 'profile' => $profile]);
     exit();
@@ -319,7 +319,7 @@ if ($action === 'change_password') {
     exit();
 }
 
-// 8. SEND EMAIL OTP OR SMS OTP
+// 8. SEND EMAIL OTP (VIA MAILERSEND API) OR SMS OTP
 if ($action === 'send_otp') {
     verify_profile_pin($pdo, $user_id, $input['profile_pin'] ?? '');
 
@@ -345,16 +345,34 @@ if ($action === 'send_otp') {
         ->execute([$otp_code, $expires_at, $channel, $user_id]);
 
     $destination = ($channel === 'email') ? $u['email'] : $u['contact_no'];
+    $dev_mode    = is_dev_mode($pdo);
+    $api_note    = '';
 
     if ($channel === 'email') {
-        $subject = "bASA Library Password Reset OTP: {$otp_code}";
-        $body    = "Hello {$u['full_name']},\n\nYour 6-digit password reset verification code is: {$otp_code}\nValid for 5 minutes.";
-        @mail($u['email'], $subject, $body, "From: noreply@bcp.edu.ph");
+        $mail_res = send_basa_otp_email($u['email'], $u['full_name'], $u['school_id'], $otp_code);
+        if ($mail_res['success']) {
+            $api_note = ' (Delivered via MailerSend API)';
+        } else {
+            if (!$dev_mode) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'MailerSend API Notice: ' . $mail_res['error']
+                ]);
+                exit();
+            }
+            $api_note = ' (MailerSend Trial Note: ' . $mail_res['error'] . ')';
+        }
     }
 
-    log_action($pdo, $user_id, 'FORGOT_PW_OTP_SENT', "Sent Forgot Password OTP via " . strtoupper($channel) . " API to {$destination}.");
+    log_action($pdo, $user_id, 'FORGOT_PW_OTP_SENT', "Sent Forgot Password OTP via " . strtoupper($channel) . " API to {$destination}{$api_note}.");
 
-    echo json_encode(['success' => true, 'channel' => $channel, 'destination' => $destination, 'demo_otp' => $otp_code, 'message' => "Verification code sent via " . strtoupper($channel) . " API to {$destination}!"]);
+    echo json_encode([
+        'success'     => true,
+        'channel'     => $channel,
+        'destination' => $destination,
+        'demo_otp'    => $dev_mode ? $otp_code : null,
+        'message'     => "Verification code sent via " . strtoupper($channel) . " to {$destination}!" . $api_note
+    ]);
     exit();
 }
 
