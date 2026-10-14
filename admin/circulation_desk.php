@@ -1,6 +1,5 @@
 <?php
 // admin/circulation_desk.php
-// hello
 $page_title = 'Webcam QR Circulation Desk';
 require_once __DIR__ . '/../includes/header.php';
 require_role(['librarian', 'super_admin']);
@@ -237,7 +236,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </template>
                 </div>
 
-                <!-- TIER 2: LITERATURE & ACCESSION STICKER VERIFICATION CARD -->
+                <!-- TIER 2: LITERATURE VERIFICATION CARD -->
                 <div class="bg-theme-card border-2 rounded-2xl p-5 transition-colors duration-300"
                      :class="scannedBook ? 'border-theme-accent shadow-[0_0_15px_rgba(0,137,208,0.1)]' : 'border-theme-border shadow-xs'">
                     <div class="flex items-center justify-between mb-3">
@@ -297,7 +296,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </button>
             </div>
 
-            <!-- ACTION PANEL B: CLOSED-LOOP RETURN & FINE SETTLEMENT -->
+            <!-- ACTION PANEL B: CLOSED-LOOP RETURN & DAMAGED PENALTY SETTLEMENT -->
             <div x-show="scannedBook && scannedBook.status === 'borrowed'" x-cloak x-transition
                  class="bg-theme-card border-2 border-amber-500/50 rounded-2xl p-5 space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-theme-border">
@@ -315,26 +314,46 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </div>
 
                     <div class="text-right">
-                        <p class="text-xs text-theme-muted uppercase font-bold">Computed Overdue Fine</p>
+                        <p class="text-xs text-theme-muted uppercase font-bold">Total Overdue & Penalty Fine</p>
                         <p class="text-2xl font-extrabold font-mono"
-                           :class="scannedBook?.active_loan?.computed_fine > 0 ? 'text-red-400' : 'text-emerald-400'"
-                           x-text="'₱' + Number(scannedBook?.active_loan?.computed_fine || 0).toFixed(2)"></p>
+                           :class="computedTotalFine > 0 ? 'text-red-400' : 'text-emerald-400'"
+                           x-text="'₱' + computedTotalFine.toFixed(2)"></p>
                     </div>
                 </div>
 
-                <div x-show="scannedBook?.active_loan?.computed_fine > 0" class="flex flex-wrap items-center gap-3">
-                    <label class="text-xs font-extrabold text-theme-text">Fine Settlement Status:</label>
-                    <select x-model="returnFineStatus" class="px-3 py-2 rounded-xl bg-theme-main border border-theme-border text-xs font-bold text-theme-text outline-none">
-                        <option value="paid">Paid at Help Desk Counter</option>
-                        <option value="unpaid">Log as Unpaid Balance on Student Account</option>
-                        <option value="waived">Waive Fine (Logs to Security Audit Trail)</option>
-                    </select>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Physical Condition Toggle -->
+                    <div class="p-3 rounded-xl bg-theme-main border border-theme-border">
+                        <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-2">Inspect Book Condition</label>
+                        <div class="flex flex-col gap-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" x-model="bookCondition" value="good" class="w-4 h-4 accent-emerald-500">
+                                <span class="text-xs font-bold text-emerald-400">Good / Normal Return</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" x-model="bookCondition" value="damaged" class="w-4 h-4 accent-[#D9232A]">
+                                <span class="text-xs font-bold text-red-400">Damaged / Missing Pages (+ ₱300 Fee)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Fine Settlement Status (Only shown if fines exist) -->
+                    <div x-show="computedTotalFine > 0" class="p-3 rounded-xl bg-theme-main border border-theme-border flex flex-col justify-center">
+                        <label class="block text-[10px] font-extrabold uppercase tracking-wider text-theme-muted mb-1">Fine Settlement Status</label>
+                        <select x-model="returnFineStatus" class="w-full px-3 py-2 rounded-xl bg-theme-card border border-theme-border text-xs font-bold text-theme-text outline-none">
+                            <option value="paid">Paid at Help Desk Counter</option>
+                            <option value="unpaid">Log as Unpaid Balance on Student Account</option>
+                            <option value="waived">Waive Fine (Logs to Security Audit Trail)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <button type="button"
                         @click="commitReturn()"
-                        class="w-full py-3.5 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg transition">
-                    ✓ Confirm Physical Book Return & Restore to Shelf <span class="font-mono" x-text="scannedBook?.placement_code"></span>
+                        :class="bookCondition === 'damaged' ? 'bg-[#D9232A] hover:bg-red-700 text-white' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'"
+                        class="w-full py-3.5 px-5 rounded-xl font-extrabold text-xs shadow-lg transition">
+                    <span x-show="bookCondition === 'good'">✓ Confirm Normal Return & Restore to Shelf <span class="font-mono" x-text="scannedBook?.placement_code"></span></span>
+                    <span x-show="bookCondition === 'damaged'">⚠️ Reject Return (Mark Damaged & Issue ₱300 Penalty)</span>
                 </button>
             </div>
 
@@ -383,23 +402,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
 </div>
 
 <script>
-// =========================================================================================
-// MASSIVE EFFICIENCY UPGRADE: Canvas Image Data Interceptor for Dark-Mode QR Reading
-// =========================================================================================
+// Canvas Image Data Interceptor for Dark-Mode QR Reading
 window.basaCamInvertEnabled = false;
 const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
 
 CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h, settings) {
     const imageData = originalGetImageData.call(this, x, y, w, h, settings);
-    
-    // If inversion is ON, physically flip the RGB values in memory before passing to the scanner
     if (window.basaCamInvertEnabled) {
         const data = imageData.data;
         for (let i = 0; i < data.length; i += 4) {
             data[i]     = 255 - data[i];       // Red
             data[i + 1] = 255 - data[i + 1];   // Green
             data[i + 2] = 255 - data[i + 2];   // Blue
-            // Alpha (data[i+3]) remains unchanged
         }
     }
     return imageData;
@@ -413,6 +427,7 @@ function circulationDeskApp() {
         scannedStudent: null,
         scannedBook: null,
         loanDays: 3,
+        bookCondition: 'good',
         returnFineStatus: 'paid',
         recentLogs: [],
         
@@ -437,6 +452,14 @@ function circulationDeskApp() {
         camInvert: false, 
         hwFocusMode: 'Auto-Focus Disabled',
 
+        get computedTotalFine() {
+            let baseFine = Number(this.scannedBook?.active_loan?.computed_fine || 0);
+            if (this.bookCondition === 'damaged') {
+                baseFine += 300; // Flat penalty for damaged book
+            }
+            return baseFine;
+        },
+
         showToast(msg, ok = true) {
             this.alertMsg = msg;
             this.alertSuccess = ok;
@@ -448,6 +471,7 @@ function circulationDeskApp() {
             this.manualInput = '';
             this.alertMsg = '';
             this.lastScannedCode = '';
+            this.bookCondition = 'good';
         },
 
         async loadRecentActivity() {
@@ -480,7 +504,6 @@ function circulationDeskApp() {
             }
 
             try {
-                // MASSIVE SPEED BOOST: Restrict scanning strictly to QR Codes.
                 const formatsToSupport = [ Html5QrcodeSupportedFormats.QR_CODE ];
 
                 this.html5QrCode = new Html5Qrcode("qr-reader", { formatsToSupport: formatsToSupport });
@@ -492,24 +515,22 @@ function circulationDeskApp() {
                 await this.html5QrCode.start(
                     cameraConfig,
                     { 
-                        fps: 20, // Doubled from 10 to 20 for instant recognition
+                        fps: 20,
                         qrbox: (viewfinderWidth, viewfinderHeight) => {
-                            // Responsive Viewfinder: 75% of screen for easier targeting
                             let minEdgePercentage = 0.75; 
                             let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
                             let qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
                             return { width: qrboxSize, height: qrboxSize };
                         },
                         aspectRatio: 1.0,
-                        disableFlip: false // Allows reading mirrored QRs from front-cams
+                        disableFlip: false 
                     },
                     (decodedText) => {
                         this.submitScan(decodedText);
                     },
-                    (err) => {} // Suppress internal not-found warnings to prevent console flood
+                    (err) => {}
                 );
 
-                // Delay capability probing slightly to let the WebRTC stream initialize
                 setTimeout(() => {
                     const video = document.querySelector('#qr-reader video');
                     if (video && video.srcObject) {
@@ -582,20 +603,16 @@ function circulationDeskApp() {
         },
 
         async submitScan(codeString) {
-            // Drop empty codes or if we are already fetching
             if (!codeString || this.isProcessing) return;
-
-            // Debouncer: If the same code is scanned immediately, ignore it.
             if (codeString === this.lastScannedCode) return;
 
-            // Optional lock: If we already have BOTH a student AND an available book ready for checkout, 
-            // pause further scanning until the librarian presses "Issue" or "Clear"
             if (this.scannedStudent && this.scannedBook && this.scannedBook.status === 'available') {
                 return; 
             }
 
             this.lastScannedCode = codeString;
             this.isProcessing = true;
+            this.bookCondition = 'good'; // Reset condition on new scan
             
             try {
                 const res = await fetch('<?= BASE_URL ?>/api/circulation/process.php', {
@@ -622,10 +639,8 @@ function circulationDeskApp() {
             } catch (err) {
                 this.showToast("Network error or invalid QR payload format.", false);
             } finally {
-                // Remove the processing overlay and allow the next unique scan
                 setTimeout(() => { 
                     this.isProcessing = false; 
-                    // Clear the last scanned code after 3 seconds so they can rescan it if needed later
                     setTimeout(() => { this.lastScannedCode = ''; }, 3000);
                 }, 800);
             }
@@ -647,7 +662,7 @@ function circulationDeskApp() {
             this.showToast(data.message, data.success);
             if (data.success) {
                 this.scannedBook = null;
-                this.lastScannedCode = ''; // Allow scanning a new book immediately
+                this.lastScannedCode = ''; 
                 await this.loadRecentActivity();
             }
         },
@@ -660,14 +675,16 @@ function circulationDeskApp() {
                 body: JSON.stringify({
                     action: 'return_book',
                     accession_id: this.scannedBook.id,
-                    fine_status: this.returnFineStatus
+                    fine_status: this.returnFineStatus,
+                    book_condition: this.bookCondition
                 })
             });
             const data = await res.json();
             this.showToast(data.message, data.success);
             if (data.success) {
                 this.scannedBook = null;
-                this.lastScannedCode = ''; // Allow scanning a new return book immediately
+                this.bookCondition = 'good';
+                this.lastScannedCode = ''; 
                 await this.loadRecentActivity();
             }
         }

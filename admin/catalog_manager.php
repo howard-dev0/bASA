@@ -27,14 +27,14 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 Literature Cataloging & QR Sticker Generator
             </h1>
             <p class="text-xs text-theme-muted mt-0.5">
-                Register Learning Books (13 domains) and Capstones (23 BCP programs) with automatic shelf placement and printable QR stickers.
+                Register Learning Books (13 domains) and Capstones/Theses (23 BCP programs) with automatic shelf placement and printable QR stickers.
             </p>
         </div>
 
         <div class="flex flex-wrap gap-2.5 shrink-0">
             <button @click="showAddModal = true"
                 class="px-4 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white text-xs font-extrabold shadow transition">
-                + Add New Book / Capstone
+                + Add New Book / Thesis
             </button>
             <button @click="openPrintAllStickers()"
                 class="px-4 py-2.5 rounded-xl bg-theme-main hover:bg-theme-hover border border-theme-border text-xs font-extrabold text-theme-text transition">
@@ -99,8 +99,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             </td>
                             <td class="py-4 px-5">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase"
-                                    :class="item.material_type === 'capstone_research' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-sky-500/20 text-sky-400'"
-                                    x-text="item.material_type === 'capstone_research' ? 'Capstone' : 'Book'"></span>
+                                      :class="item.material_type === 'capstone_research' ? (['BSIT', 'BSCPE', 'BLIS'].includes(item.subject_or_program) ? 'bg-indigo-500/20 text-indigo-400' : 'bg-purple-500/20 text-purple-400') : 'bg-sky-500/20 text-sky-400'"
+                                      x-text="item.material_type === 'capstone_research' ? (['BSIT', 'BSCPE', 'BLIS'].includes(item.subject_or_program) ? 'Capstone' : 'Thesis') : 'Book'"></span>
                                 <p class="font-mono font-bold text-theme-text mt-1" x-text="item.subject_or_program"></p>
                             </td>
                             <td class="py-4 px-5">
@@ -150,7 +150,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <div class="p-5 border-b border-theme-border flex items-center justify-between bg-theme-main/50">
                 <div>
-                    <h3 class="text-base font-extrabold text-theme-text">Catalog New Book or Capstone Research</h3>
+                    <h3 class="text-base font-extrabold text-theme-text">Catalog New Book, Thesis or Capstone</h3>
                     <p class="text-xs text-theme-muted">Automatically maps to the correct 4th Floor Shelf (`SH00`–`SH14`)</p>
                 </div>
                 <button @click="showAddModal = false" class="w-8 h-8 rounded-lg bg-theme-hover text-theme-muted font-bold">&times;</button>
@@ -163,7 +163,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <select x-model="form.material_type" @change="onTypeChange()"
                             class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
                             <option value="learning_book">📚 Academic Learning Book (SH01–SH09)</option>
-                            <option value="capstone_research">🎓 Capstone / Thesis Research (SH00, SH10–SH14)</option>
+                            <option value="capstone_research">🎓 Thesis / Capstone Research (SH00, SH10–SH14)</option>
                         </select>
                     </div>
 
@@ -175,7 +175,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                             x-model="form.subject_or_program" @change="autoAssignShelf()"
                             class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
                             <optgroup label="📚 13 Learning Book Domains (SH01–SH09)">
-                                <?php foreach (BOOK_SUBJECTS as $code =>$label): ?>
+                                <?php foreach (BOOK_SUBJECTS as $code => $label): ?>
                                     <option value="<?= e($code) ?>"><?= e($code) ?> — <?= e($label) ?></option>
                                 <?php endforeach; ?>
                             </optgroup>
@@ -185,9 +185,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <select x-show="form.material_type === 'capstone_research'" x-cloak
                             x-model="form.subject_or_program" @change="autoAssignShelf()"
                             class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-bold text-theme-text">
-                            <?php foreach (BCP_PROGRAMS as $cCode =>$cluster): ?>
+                            <?php foreach (BCP_PROGRAMS as $cCode => $cluster): ?>
                                 <optgroup label="🎓 <?= e($cluster['label']) ?>">
-                                    <?php foreach ($cluster['programs'] as $pCode =>$pName): ?>
+                                    <?php foreach ($cluster['programs'] as $pCode => $pName): ?>
                                         <option value="<?= e($pCode) ?>"><?= e($pCode) ?> — <?= e($pName) ?></option>
                                     <?php endforeach; ?>
                                 </optgroup>
@@ -199,12 +199,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div class="sm:col-span-2">
                         <label class="block font-extrabold uppercase text-theme-muted mb-1">Title of Literature</label>
-                        <input type="text" x-model="form.title" required placeholder="Full book or capstone research title"
+                        <input type="text" x-model="form.title" required placeholder="Full book, thesis or capstone title"
                             class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border text-theme-text">
                     </div>
                     <div>
                         <label class="block font-extrabold uppercase text-theme-muted mb-1">ISBN / Document Code</label>
-                        <input type="text" x-model="form.isbn_or_doc_id" required placeholder="e.g. 978-0132350884"
+                        <input type="text" x-model="form.isbn_or_doc_id" required placeholder="e.g. BCP-RES-2025"
                             class="w-full px-3.5 py-2.5 rounded-xl bg-theme-main border border-theme-border font-mono text-theme-text">
                     </div>
                 </div>
@@ -234,7 +234,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div>
                             <label class="block text-[10px] font-bold text-theme-muted mb-1">Shelf Unit</label>
                             <select x-model="form.shelf_id" class="w-full px-2.5 py-2 rounded-lg bg-theme-card border border-theme-border font-mono text-theme-text">
-                                <?php for ($i = 0; $i <= 14; $i++): $sc = sprintf('SH\%02d',$i); ?>
+                                <?php for ($i = 0; $i <= 14; $i++): $sc = sprintf('SH%02d', $i); ?>
                                     <option value="<?= $sc ?>"><?= $sc ?></option>
                                 <?php endfor; ?>
                             </select>
@@ -299,7 +299,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <p class="text-xs text-theme-muted">Contains compact Version-2 QR matrix + Accession ID + 4th Floor Shelf Placement Code</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <!-- Toggle Inverted Stickers -->
                     <button @click="toggleInvert()" type="button"
                             :class="qrInverted ? 'bg-indigo-500 text-white' : 'bg-theme-main text-theme-muted border border-theme-border'"
                             class="px-3 py-2 rounded-xl text-xs font-extrabold shadow transition">
@@ -313,7 +312,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </div>
             </div>
 
-            <!-- Print Area: Automatically adjusts colors via style injection for @media print -->
             <div id="printableStickerArea" class="p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
                  :style="qrInverted ? 'background-color: #0f172a !important; color: #ffffff !important; color-adjust: exact; -webkit-print-color-adjust: exact;' : 'background-color: #ffffff !important; color: #000000 !important; color-adjust: exact; -webkit-print-color-adjust: exact;'">
                 
@@ -323,7 +321,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <p class="text-[10px] font-extrabold uppercase tracking-wider"
                            :class="qrInverted ? 'text-slate-400' : 'text-slate-600'">BCP 4TH FLOOR LIBRARY • bASA</p>
                         
-                        <!-- Adaptive QR Container for Stickers -->
                         <div :id="'sticker-qr-' + st.accession_no" class="my-2.5 p-2 rounded" :class="qrInverted ? 'bg-[#0f172a]' : 'bg-white'"></div>
                         
                         <p class="font-mono text-xs font-extrabold"
@@ -389,7 +386,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             selectedStickers: [],
             alertMsg: '',
             alertOk: true,
-            qrInverted: false, // State for Sticker Inversion
+            qrInverted: false,
 
             form: {
                 material_type: 'learning_book',
@@ -519,7 +516,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                 width: 112,
                                 height: 112,
                                 colorDark: this.qrInverted ? "#ffffff" : "#000000",
-                                colorLight: this.qrInverted ? "#0f172a" : "#ffffff", // Use a dark slate to match
+                                colorLight: this.qrInverted ? "#0f172a" : "#ffffff",
                                 correctLevel: QRCode.CorrectLevel.M
                             });
                         }

@@ -21,7 +21,6 @@ while ($r = $stmt_set->fetch()) {
 $daily_fine_rate    = (float) ($settings['daily_fine_rate'] ?? 10.00);
 $loan_duration_days = (int) ($settings['loan_duration_days'] ?? 3);
 
-// Helper: Fetch Book Accession + Active Loan Details
 function get_accession_details(object $pdo, string $accession_no, float $daily_fine_rate): ?array {
     $stmt = $pdo->prepare("
         SELECT ia.*, ci.material_type, ci.isbn_or_doc_id, ci.title, ci.authors,
@@ -71,7 +70,6 @@ if ($action === 'scan_decode') {
         exit();
     }
 
-    // CASE A: Express Borrow QR (BASA-EXP|...) OR Student Book Return QR (BASA-RET|...)
     if (str_starts_with($raw_code, 'BASA-EXP|') || str_starts_with($raw_code, 'BASA-RET|')) {
         $is_return_qr = str_starts_with($raw_code, 'BASA-RET|');
         $parts = explode('|', $raw_code);
@@ -127,7 +125,6 @@ if ($action === 'scan_decode') {
         exit();
     }
 
-    // CASE B: Student 30-Second Dynamic TOTP QR
     if (str_starts_with($raw_code, 'BASA-USR|')) {
         $verification = verify_student_totp($raw_code, $pdo);
         if (!$verification['valid']) {
@@ -143,7 +140,6 @@ if ($action === 'scan_decode') {
         exit();
     }
 
-    // CASE C: Simulate Live Student TOTP Scan (SIM-USR|240103537)
     if (str_starts_with($raw_code, 'SIM-USR|')) {
         $sim_id = trim(substr($raw_code, 8));
         $stmt_u = $pdo->prepare("SELECT school_id, totp_secret FROM users WHERE school_id = ? LIMIT 1");
@@ -164,7 +160,6 @@ if ($action === 'scan_decode') {
         exit();
     }
 
-    // CASE D: Physical Book or Capstone Sticker QR
     $book = get_accession_details($pdo, $raw_code, $daily_fine_rate);
     if ($book) {
         echo json_encode([
@@ -238,10 +233,11 @@ if ($action === 'checkout') {
     exit();
 }
 
-// 3. CLOSED-LOOP BOOK RETURN & FINE SETTLEMENT
+// 3. CLOSED-LOOP BOOK RETURN & FINE SETTLEMENT (Supports Damaged Book Penalty)
 if ($action === 'return_book') {
-    $accession_id = (int) ($input['accession_id'] ?? 0);
-    $fine_action  = trim($input['fine_status'] ?? 'none');
+    $accession_id   = (int) ($input['accession_id'] ?? 0);
+    $fine_action    = trim($input['fine_status'] ?? 'none');
+    $book_condition = trim($input['book_condition'] ?? 'good');
 
     $stmt_tx = $pdo->prepare("
         SELECT bt.*, ia.accession_no, ia.placement_code, ci.title, u.school_id, u.full_name
@@ -263,17 +259,24 @@ if ($action === 'return_book') {
     $due_ts = strtotime($tx['due_date']);
     $now_ts = time();
     $fine_amount = 0.00;
+
+    // Calculate Overdue
     if ($now_ts > $due_ts) {
         $overdue_days = (int) ceil(($now_ts - $due_ts) / 86400);
         $fine_amount  = round($overdue_days * $daily_fine_rate, 2);
     }
 
+    // Calculate Damaged Penalty Fee
+    $penalty_fee = ($book_condition === 'damaged') ? 300.00 : 0.00;
+    $total_fine = $fine_amount + $penalty_fee;
+
     $final_fine_status = 'none';
-    if ($fine_amount > 0) {
+    if ($total_fine > 0) {
         $final_fine_status = in_array($fine_action, ['paid', 'unpaid', 'waived'], true) ? $fine_action : 'unpaid';
     }
 
     $returned_at = date('Y-m-d H:i:s');
+    $new_book_status = ($book_condition === 'damaged') ? 'damaged' : 'available';
 
     try {
         $pdo->beginTransaction();
@@ -283,20 +286,28 @@ if ($action === 'return_book') {
             SET received_by_id = ?, returned_at = ?, fine_amount = ?, fine_status = ?, status = 'returned'
             WHERE id = ?
         ");
-        $stmt_upd->execute([$staff_id, $returned_at, $fine_amount, $final_fine_status, $tx['id']]);
+        $stmt_upd->execute([$staff_id, $returned_at, $total_fine, $final_fine_status, $tx['id']]);
 
-        $pdo->prepare("UPDATE item_accessions SET status = 'available' WHERE id = ?")
-            ->execute([$accession_id]);
+        $pdo->prepare("UPDATE item_accessions SET status = ? WHERE id = ?")
+            ->execute([$new_book_status, $accession_id]);
 
+        $cond_text = ($book_condition === 'damaged') ? "DAMAGED (₱300 Penalty)" : "Good";
         $event = ($final_fine_status === 'waived') ? 'FINE_WAIVED' : 'BOOK_RETURN';
-        log_action($pdo, $staff_id, $event, "Returned {$tx['accession_no']} from Student #{$tx['school_id']}. Fine: ₱{$fine_amount} ({$final_fine_status}). Restored to {$tx['placement_code']}.");
+        log_action($pdo, $staff_id, $event, "Returned {$tx['accession_no']} from Student #{$tx['school_id']}. Cond: {$cond_text}. Fine: ₱{$total_fine} ({$final_fine_status}). Restored to {$tx['placement_code']}.");
 
         $pdo->commit();
 
-        echo json_encode([
-            'success' => true,
-            'message' => "Closed-Loop Return Complete! {$tx['accession_no']} is now AVAILABLE. Reshelve at {$tx['placement_code']}."
-        ]);
+        if ($book_condition === 'damaged') {
+            echo json_encode([
+                'success' => true,
+                'message' => "Return Processed! ₱300 Penalty applied. {$tx['accession_no']} is marked as DAMAGED and cannot be borrowed."
+            ]);
+        } else {
+            echo json_encode([
+                'success' => true,
+                'message' => "Return Complete! {$tx['accession_no']} is now AVAILABLE. Reshelve at {$tx['placement_code']}."
+            ]);
+        }
     } catch (\Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         echo json_encode(['success' => false, 'message' => 'Return failed: ' . $e->getMessage()]);
@@ -304,7 +315,6 @@ if ($action === 'return_book') {
     exit();
 }
 
-// 4. FETCH RECENT CIRCULATION LOGS
 if ($action === 'recent_activity') {
     $stmt = $pdo->query("
         SELECT bt.id, bt.borrowed_at, bt.due_date, bt.returned_at, bt.fine_amount, bt.fine_status, bt.status,

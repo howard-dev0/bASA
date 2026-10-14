@@ -53,7 +53,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <button @click="setTab('capstone_research')"
                     :class="activeTab === 'capstone_research' ? 'bg-theme-accent text-white shadow' : 'bg-theme-main text-theme-muted hover:text-theme-text border-theme-border'"
                     class="px-3.5 py-2 rounded-xl border text-xs font-extrabold transition">
-                🎓 Capstones & Researches (23 Programs)
+                🎓 Capstones & Theses (23 Programs)
             </button>
             <button @click="setTab('favorites')"
                     :class="activeTab === 'favorites' ? 'bg-amber-500 text-slate-950 shadow border-amber-500' : 'bg-theme-main text-theme-muted hover:text-theme-text border-theme-border'"
@@ -202,8 +202,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <div class="flex items-center justify-between gap-2 mb-3">
                         <div class="flex flex-wrap items-center gap-1.5">
                             <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase"
-                                  :class="item.material_type === 'capstone_research' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-sky-500/20 text-sky-400 border border-sky-500/30'"
-                                  x-text="item.material_type === 'capstone_research' ? '🎓 Capstone' : '📚 Book'"></span>
+                                  :class="item.material_type === 'capstone_research' ? (['BSIT', 'BSCPE', 'BLIS'].includes(item.subject_or_program) ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-purple-500/20 text-purple-400 border border-purple-500/30') : 'bg-sky-500/20 text-sky-400 border border-sky-500/30'"
+                                  x-text="item.material_type === 'capstone_research' ? (['BSIT', 'BSCPE', 'BLIS'].includes(item.subject_or_program) ? '🎓 Capstone' : '📜 Thesis') : '📚 Book'"></span>
                             <span class="px-2 py-0.5 rounded bg-theme-main border border-theme-border text-[10px] font-extrabold font-mono text-theme-text"
                                   x-text="item.subject_or_program"></span>
                             <span x-show="item.available_copies == 0"
@@ -256,7 +256,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <div>
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-theme-accent text-white"
-                              x-text="selectedItem?.material_type === 'capstone_research' ? 'Capstone Research' : 'Academic Learning Book'"></span>
+                              x-text="selectedItem?.material_type === 'capstone_research' ? (['BSIT', 'BSCPE', 'BLIS'].includes(selectedItem?.subject_or_program) ? 'Capstone Research' : 'Undergraduate Thesis') : 'Academic Learning Book'"></span>
                         <span class="font-mono text-xs font-bold text-theme-accent" x-text="selectedItem?.subject_or_program"></span>
                         <span class="font-mono text-xs text-theme-muted" x-text="'• Published ' + selectedItem?.publish_year"></span>
                         <span x-show="selectedItem?.available_copies == 0"
