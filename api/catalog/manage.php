@@ -44,7 +44,7 @@ if ($action === 'list') {
     ")->fetchAll();
 
     $stmt_acc = $pdo->prepare("
-        SELECT id, accession_no, shelf_id, shelf_side, shelf_section, shelf_level, placement_code, status
+        SELECT id, catalog_id, accession_no, shelf_id, shelf_side, shelf_section, shelf_level, placement_code, status
         FROM item_accessions
         WHERE catalog_id = ?
         ORDER BY accession_no ASC
@@ -52,7 +52,12 @@ if ($action === 'list') {
 
     foreach ($items as &$item) {
         $stmt_acc->execute([$item['id']]);
-        $item['accessions'] = $stmt_acc->fetchAll();
+        $accessions = $stmt_acc->fetchAll();
+        $item['accessions']       = $accessions;
+        $item['total_copies']     = count($accessions);
+        $item['available_copies'] = count(array_filter($accessions, fn($a) => $a['status'] === 'available'));
+        $item['damaged_or_lost']  = count(array_filter($accessions, fn($a) => in_array($a['status'], ['damaged', 'lost'], true)));
+        $item['borrowed_copies']  = count(array_filter($accessions, fn($a) => $a['status'] === 'borrowed'));
     }
 
     echo json_encode(['success' => true, 'items' => $items]);
@@ -173,7 +178,137 @@ if ($action === 'add_copy') {
     exit();
 }
 
-// 4. DELETE LITERATURE ITEM (Only if no copies have active borrow transactions)
+// 4. UPDATE INDIVIDUAL COPY AVAILABILITY STATUS & SHELF LOCATION
+if ($action === 'update_copy_status') {
+    $accession_id  = (int) ($input['accession_id'] ?? 0);
+    $new_status    = trim($input['status'] ?? 'available');
+    $shelf_id      = trim($input['shelf_id'] ?? '');
+    $shelf_side    = trim($input['shelf_side'] ?? '');
+    $shelf_section = trim($input['shelf_section'] ?? '');
+    $shelf_level   = trim($input['shelf_level'] ?? '');
+
+    if (!in_array($new_status, ['available', 'damaged', 'lost', 'reserved'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid copy availability status.']);
+        exit();
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT ia.*, ci.title
+        FROM item_accessions ia
+        JOIN catalog_items ci ON ia.catalog_id = ci.id
+        WHERE ia.id = ? LIMIT 1
+    ");
+    $stmt->execute([$accession_id]);
+    $acc = $stmt->fetch();
+
+    if (!$acc) {
+        echo json_encode(['success' => false, 'message' => 'Physical copy not found.']);
+        exit();
+    }
+
+    if ($acc['status'] === 'borrowed') {
+        echo json_encode(['success' => false, 'message' => "Copy {$acc['accession_no']} is currently checked out to a borrower. Process its return at the Circulation Desk first."]);
+        exit();
+    }
+
+    $final_shelf   = $shelf_id !== '' ? $shelf_id : $acc['shelf_id'];
+    $final_side    = $shelf_side !== '' ? $shelf_side : $acc['shelf_side'];
+    $final_section = $shelf_section !== '' ? $shelf_section : $acc['shelf_section'];
+    $final_level   = $shelf_level !== '' ? $shelf_level : $acc['shelf_level'];
+
+    if (in_array($final_shelf, ['SH00', 'SH10', 'SH11', 'SH12', 'SH13', 'SH14'], true)) {
+        $final_side = 'F';
+    }
+
+    $placement_code = "{$final_shelf}-{$final_side}-{$final_section}-{$final_level}";
+
+    $pdo->prepare("
+        UPDATE item_accessions
+        SET status = ?, shelf_id = ?, shelf_side = ?, shelf_section = ?, shelf_level = ?, placement_code = ?
+        WHERE id = ?
+    ")->execute([$new_status, $final_shelf, $final_side, $final_section, $final_level, $placement_code, $accession_id]);
+
+    log_action($pdo, $staff_id, 'ACCESSION_STATUS_UPDATE', "Updated copy {$acc['accession_no']} ('{$acc['title']}') status from {$acc['status']} to " . strtoupper($new_status) . " at {$placement_code}.");
+
+    echo json_encode([
+        'success' => true,
+        'message' => "Copy {$acc['accession_no']} updated to " . strtoupper($new_status) . " ({$placement_code})."
+    ]);
+    exit();
+}
+
+// 5. RESTORE ALL UNAVAILABLE (DAMAGED / LOST / RESERVED) COPIES OF AN ITEM TO AVAILABLE
+if ($action === 'restore_unavailable_copies') {
+    $catalog_id = (int) ($input['catalog_id'] ?? 0);
+
+    $stmt = $pdo->prepare("SELECT title FROM catalog_items WHERE id = ? LIMIT 1");
+    $stmt->execute([$catalog_id]);
+    $item = $stmt->fetch();
+
+    if (!$item) {
+        echo json_encode(['success' => false, 'message' => 'Literature item not found.']);
+        exit();
+    }
+
+    $upd = $pdo->prepare("
+        UPDATE item_accessions
+        SET status = 'available'
+        WHERE catalog_id = ? AND status IN ('damaged', 'lost', 'reserved')
+    ");
+    $upd->execute([$catalog_id]);
+    $restored_count = $upd->rowCount();
+
+    log_action($pdo, $staff_id, 'ACCESSION_RESTORE_ALL', "Restored {$restored_count} unavailable copy/copies of '{$item['title']}' to AVAILABLE.");
+
+    echo json_encode([
+        'success' => true,
+        'message' => "Restored {$restored_count} copy/copies of '{$item['title']}' to AVAILABLE!"
+    ]);
+    exit();
+}
+
+// 6. DELETE A SINGLE PHYSICAL COPY (e.g. Permanently Destroyed or Unrecoverable Copy)
+if ($action === 'delete_copy') {
+    $accession_id = (int) ($input['accession_id'] ?? 0);
+
+    $stmt = $pdo->prepare("
+        SELECT ia.*, ci.title
+        FROM item_accessions ia
+        JOIN catalog_items ci ON ia.catalog_id = ci.id
+        WHERE ia.id = ? LIMIT 1
+    ");
+    $stmt->execute([$accession_id]);
+    $acc = $stmt->fetch();
+
+    if (!$acc) {
+        echo json_encode(['success' => false, 'message' => 'Physical copy not found.']);
+        exit();
+    }
+
+    if ($acc['status'] === 'borrowed') {
+        echo json_encode(['success' => false, 'message' => 'Cannot delete a physical copy while it is currently borrowed.']);
+        exit();
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $pdo->prepare("DELETE FROM borrow_transactions WHERE accession_id = ?")->execute([$accession_id]);
+        $pdo->prepare("DELETE FROM item_accessions WHERE id = ?")->execute([$accession_id]);
+        log_action($pdo, $staff_id, 'ACCESSION_DELETE', "Removed physical copy {$acc['accession_no']} ('{$acc['title']}').");
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => "Physical copy {$acc['accession_no']} removed from inventory."
+        ]);
+    } catch (\Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        echo json_encode(['success' => false, 'message' => 'Could not delete copy: ' . $e->getMessage()]);
+    }
+    exit();
+}
+
+// 7. DELETE ENTIRE LITERATURE ITEM
 if ($action === 'delete_item') {
     $catalog_id = (int) ($input['catalog_id'] ?? 0);
 
@@ -186,7 +321,6 @@ if ($action === 'delete_item') {
         exit();
     }
 
-    // Check if any copy is currently borrowed
     $stmt_borrowed = $pdo->prepare("
         SELECT COUNT(*) FROM item_accessions
         WHERE catalog_id = ? AND status = 'borrowed'
@@ -199,7 +333,6 @@ if ($action === 'delete_item') {
 
     try {
         $pdo->beginTransaction();
-        // Delete past borrow transactions referencing this item's accessions so FK doesn't block
         $pdo->prepare("
             DELETE bt FROM borrow_transactions bt
             JOIN item_accessions ia ON bt.accession_id = ia.id
